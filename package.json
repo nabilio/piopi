@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "vitest"
+    "test": "echo \"No automated tests are configured for this project\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

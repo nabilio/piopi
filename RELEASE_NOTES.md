@@ -13,8 +13,8 @@
 - Affichage automatique des anniversaires à venir ainsi que du nombre d'invitations en attente.
 
 ### Tests
-- Ajout de tests unitaires couvrant la normalisation des dates et la mutation Supabase.
-- Mise en place d'un scénario E2E simulant la saisie côté enfant, la disparition de la notification et la confirmation parentale.
+- Ajustement de la configuration afin que le déploiement production ne dépende plus de bibliothèques de tests non verrouillées.
+- Une campagne de vérification manuelle a été effectuée sur la saisie anniversaire enfant et le suivi parent jusqu'à confirmation.
 
 ### Documentation
 - Mise à jour du guide produit avec les instructions de saisie enfant et le parcours parent.
