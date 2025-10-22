@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Star, Award, UserPlus, Clock, Target, Zap, Pencil, Palette, Trash2, Share2 } from 'lucide-react';
+import { Trophy, Star, Award, UserPlus, Clock, Target, Zap, Pencil, Palette, Trash2, Share2, Sparkles, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { DrawingCanvas } from './DrawingCanvas';
+import { PhotoCollageModal } from './PhotoCollageModal';
 
 type ChildProfileProps = {
   childId: string;
@@ -88,6 +89,7 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
   const [isFriend, setIsFriend] = useState(false);
   const [friendRequestPending, setFriendRequestPending] = useState(false);
   const [showDrawing, setShowDrawing] = useState(false);
+  const [showCollage, setShowCollage] = useState(false);
   const [drawingToDelete, setDrawingToDelete] = useState<string | null>(null);
   const [activityReactions, setActivityReactions] = useState<{[key: string]: {counts: {[key: string]: number}, userReactions: string[], activityId: string}}>({});
 
@@ -97,6 +99,7 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
   }, [childId]);
 
   async function loadProfileData() {
+    setLoading(true);
     try {
       console.log('Loading profile for childId:', childId);
       const { data: profile, error: profileError } = await supabase
@@ -319,10 +322,25 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
 
       if (error) throw error;
 
-      setDrawings(drawings.filter(d => d.id !== drawingToDelete));
       setDrawingToDelete(null);
+      await loadProfileData();
     } catch (error) {
       console.error('Error deleting drawing:', error);
+    }
+  }
+
+  async function toggleDrawingShare(drawingId: string, share: boolean) {
+    try {
+      const { error } = await supabase
+        .from('drawings')
+        .update({ is_shared: share })
+        .eq('id', drawingId);
+
+      if (error) throw error;
+
+      await loadProfileData();
+    } catch (error) {
+      console.error('Error updating drawing share status:', error);
     }
   }
 
@@ -423,8 +441,8 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${config.color} font-medium`}>
         {content}
       </div>
-    );
-  }
+  );
+}
 
   if (loading) {
     return (
@@ -556,14 +574,142 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
                 {currentProfile?.id === childId && (
                   <button
                     onClick={() => setShowDrawing(true)}
-                    className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 text-purple-700 text-sm md:text-base font-medium hover:opacity-80 transition cursor-pointer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white text-sm md:text-base font-semibold shadow-md hover:shadow-lg transition cursor-pointer"
                   >
-                    <Palette size={16} className="md:w-[18px] md:h-[18px]" />
-                    <span>Créer un dessin</span>
+                    <Palette size={18} className="md:w-[20px] md:h-[20px]" />
+                    <span>Atelier de dessin</span>
                   </button>
                 )}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl shadow-lg p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-gradient-to-br from-pink-100 to-purple-100 text-pink-600 shadow-inner">
+                <Palette size={28} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-1">Classeur de dessins</h2>
+                <p className="text-gray-600 text-sm md:text-base">
+                  Garde toutes tes œuvres au même endroit et partage tes favorites avec ta famille et tes amis.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pink-50 text-pink-600 font-semibold">
+                    <Sparkles size={16} /> {drawings.length} création{drawings.length > 1 ? 's' : ''}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 font-semibold">
+                    <Share2 size={16} /> {sharedDrawings.length} partagé{sharedDrawings.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {currentProfile?.id === childId && (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setShowDrawing(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
+                  >
+                    <Palette size={18} />
+                    Nouveau dessin
+                  </button>
+                  <button
+                    onClick={() => setShowCollage(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-purple-600 font-semibold border-2 border-purple-200 shadow hover:bg-purple-50 transition"
+                  >
+                    <Sparkles size={18} />
+                    Collation photo magique
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6">
+            {drawings.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {drawings.map((drawing) => (
+                  <div key={drawing.id} className="bg-white border-2 border-pink-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
+                    <div className="relative bg-gray-50">
+                      <img src={drawing.drawing_data} alt={drawing.title} className="w-full h-56 object-contain" />
+                      <div className="absolute top-3 right-3">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow ${drawing.is_shared ? 'bg-purple-500 text-white' : 'bg-gray-800/80 text-white'}`}>
+                          {drawing.is_shared ? <Share2 size={14} /> : <Lock size={14} />}
+                          {drawing.is_shared ? 'Partagé' : 'Privé'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-800">
+                            {drawing.title || 'Mon dessin'}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            {new Date(drawing.created_at).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {currentProfile?.id === childId && (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => toggleDrawingShare(drawing.id, !drawing.is_shared)}
+                            className={`flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition ${drawing.is_shared ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+                          >
+                            <Share2 size={16} />
+                            {drawing.is_shared ? 'Rendre privé' : 'Partager'}
+                          </button>
+                          <button
+                            onClick={() => setDrawingToDelete(drawing.id)}
+                            className="px-3 py-2 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition inline-flex items-center gap-1"
+                          >
+                            <Trash2 size={16} />
+                            Supprimer
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border-2 border-dashed border-pink-200 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 mx-auto rounded-full bg-pink-100 flex items-center justify-center mb-4">
+                  <Palette className="text-pink-500" size={28} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Ton classeur est vide pour l'instant</h3>
+                <p className="text-gray-600 max-w-md mx-auto">
+                  Crée un premier dessin pour démarrer ta collection et le partager quand tu seras prêt.
+                </p>
+                {currentProfile?.id === childId && (
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
+                    <button
+                      onClick={() => setShowDrawing(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
+                    >
+                      <Palette size={18} />
+                      Créer mon premier dessin
+                    </button>
+                    <button
+                      onClick={() => setShowCollage(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-purple-600 font-semibold border-2 border-purple-200 shadow hover:bg-purple-50 transition"
+                    >
+                      <Sparkles size={18} />
+                      Composer une collation
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -818,45 +964,6 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
           </div>
         </div>
 
-        {drawings.filter(d => !d.is_shared).length > 0 && (
-          <div className="bg-white rounded-3xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Palette className="text-pink-500" />
-              Dessins Privés
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {drawings.filter(d => !d.is_shared).map((drawing) => (
-                <div
-                  key={drawing.id}
-                  className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden hover:border-pink-300 transition"
-                >
-                  <img
-                    src={drawing.drawing_data}
-                    alt={drawing.title}
-                    className="w-full h-48 object-contain bg-gray-50"
-                  />
-                  <div className="p-3">
-                    <p className="font-semibold text-gray-800">{drawing.title}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xs text-gray-500">
-                        {new Date(drawing.created_at).toLocaleDateString('fr-FR')}
-                      </p>
-                      {currentProfile?.id === childId && (
-                        <button
-                          onClick={() => setDrawingToDelete(drawing.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {showDrawing && (
@@ -865,6 +972,17 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
           onClose={() => setShowDrawing(false)}
           onSaved={() => {
             setShowDrawing(false);
+            loadProfileData();
+          }}
+        />
+      )}
+
+      {showCollage && (
+        <PhotoCollageModal
+          childId={childId}
+          onClose={() => setShowCollage(false)}
+          onSaved={() => {
+            setShowCollage(false);
             loadProfileData();
           }}
         />
