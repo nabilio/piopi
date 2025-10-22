@@ -1,0 +1,30 @@
+name: Deploy DEV to VPS
+on:
+  push:
+    branches: ["dev"]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.VPS_HOST }}
+          username: ${{ vars.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            APP_DIR=/home/adminio/htdocs/lapsi.online
+            PROC_NAME=piopi-dev
+            PORT=3001
+            cd $APP_DIR
+            git fetch origin dev
+            git reset --hard origin/dev
+            npm ci
+            npm run build
+            which serve || npm install -g serve pm2
+            pm2 delete $PROC_NAME || true
+            pm2 start "serve -s ./dist -l $PORT" --name $PROC_NAME
+            pm2 save
+            sudo nginx -t && sudo systemctl reload nginx
