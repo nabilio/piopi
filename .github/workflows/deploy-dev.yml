@@ -25,34 +25,32 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
+            export PATH=/usr/bin:/usr/local/bin:$PATH
 
-            # ==== Charger NVM pour avoir node/npm dans le PATH ====
-            export NVM_DIR="\$HOME/.nvm"
-            if [ -s "\$NVM_DIR/nvm.sh" ]; then
-              . "\$NVM_DIR/nvm.sh"
-              nvm use --lts >/dev/null 2>&1 || nvm use >/dev/null 2>&1 || true
-            fi
-
-            echo "Node version: \$(node -v || echo 'not found')"
-            echo "NPM version: \$(npm -v  || echo 'not found')"
+            echo "Node version: $(node -v)"
+            echo "NPM version: $(npm -v)"
 
             APP_DIR=/home/adminio/htdocs/lapsi.online
             PROC_NAME=piopi-dev
             PORT=3001
 
-            cd \$APP_DIR
+            if [ ! -d "$APP_DIR" ]; then
+              echo "❌ Erreur: le dossier $APP_DIR n'existe pas sur le VPS"
+              exit 1
+            fi
+
+            cd $APP_DIR
             git fetch origin dev
             git reset --hard origin/dev
 
             npm ci
             npm run build
 
-            # Installation PM2 et Serve si absents
             if ! command -v pm2 >/dev/null 2>&1; then npm i -g pm2; fi
             if ! command -v serve >/dev/null 2>&1; then npm i -g serve; fi
 
-            pm2 delete \$PROC_NAME || true
-            pm2 start "serve -s ./dist -l \$PORT" --name \$PROC_NAME
+            pm2 delete $PROC_NAME || true
+            pm2 start "serve -s ./dist -l $PORT" --name $PROC_NAME
             pm2 save
 
             sudo nginx -t && sudo systemctl reload nginx
