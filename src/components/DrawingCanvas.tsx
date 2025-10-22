@@ -1,8 +1,22 @@
 import { useRef, useState, useEffect } from 'react';
-import { X, Eraser, Pencil, Palette, Share2, Save, Trash2, Undo, ChevronDown } from 'lucide-react';
+import {
+  X,
+  Eraser,
+  Pencil,
+  Palette,
+  Share2,
+  Save,
+  Trash2,
+  Undo,
+  ChevronDown,
+  Camera,
+  ImagePlus,
+  Wand2
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { applyMagicFrame, loadImageElement } from '../utils/drawingEffects';
 
 type DrawingCanvasProps = {
   onClose: () => void;
@@ -22,6 +36,8 @@ const BRUSH_SIZES = [2, 5, 10, 15, 20, 30, 40];
 export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(5);
@@ -32,8 +48,18 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [importingImage, setImportingImage] = useState(false);
   const { profile } = useAuth();
   const { showToast } = useToast();
+
+  const resetBackground = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
 
   useEffect(() => {
     // Détecter si on est sur mobile
@@ -58,11 +84,7 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
         canvas.height = 600;
       }
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      resetBackground();
       saveToHistory();
     };
 
@@ -165,13 +187,80 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
   };
 
   const clearCanvas = () => {
+    resetBackground();
+    saveToHistory();
+  };
+
+  const placeImageOnCanvas = async (dataUrl: string) => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const image = await loadImageElement(dataUrl);
+    resetBackground();
+
+    const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    const offsetX = (canvas.width - drawWidth) / 2;
+    const offsetY = (canvas.height - drawHeight) / 2;
+
+    ctx.save();
+    ctx.filter = 'brightness(1.02) contrast(1.08) saturate(1.12)';
+    ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+    ctx.restore();
     saveToHistory();
+  };
+
+  const handleFileSelection = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setImportingImage(true);
+    try {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const result = typeof reader.result === 'string' ? reader.result : null;
+          if (result) {
+            await placeImageOnCanvas(result);
+            showToast('Image importée dans ton atelier ✨', 'success');
+          }
+        } catch (error) {
+          console.error('Error placing image:', error);
+          showToast("Impossible d'importer cette image", 'error');
+        } finally {
+          setImportingImage(false);
+          if (galleryInputRef.current) {
+            galleryInputRef.current.value = '';
+          }
+          if (cameraInputRef.current) {
+            cameraInputRef.current.value = '';
+          }
+        }
+      };
+      reader.onerror = () => {
+        showToast('Erreur lors du chargement de la photo', 'error');
+        setImportingImage(false);
+        if (galleryInputRef.current) {
+          galleryInputRef.current.value = '';
+        }
+        if (cameraInputRef.current) {
+          cameraInputRef.current.value = '';
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      showToast('Erreur lors de la sélection de la photo', 'error');
+      setImportingImage(false);
+      if (galleryInputRef.current) {
+        galleryInputRef.current.value = '';
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
+      }
+    }
   };
 
   const handleSave = async (share: boolean) => {
@@ -184,7 +273,14 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
 
     setSaving(true);
     try {
-      const drawingData = canvas.toDataURL('image/png');
+      const baseDrawingData = canvas.toDataURL('image/png');
+      let drawingData = baseDrawingData;
+
+      try {
+        drawingData = await applyMagicFrame(baseDrawingData);
+      } catch (effectError) {
+        console.warn('Unable to apply magic frame effect, keeping original drawing.', effectError);
+      }
 
       const { error } = await supabase
         .from('drawings')
@@ -293,25 +389,48 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
               <ChevronDown size={20} className="text-gray-600" />
             </button>
 
-            {/* Plus d'outils */}
-            <button
-              onClick={() => {
-                setShowTools(!showTools);
-                setShowColorPicker(false);
-              }}
-              className="px-4 py-3 bg-white rounded-xl shadow-md text-gray-700 font-semibold"
-            >
-              Outils
-            </button>
-
-            <button
-              onClick={undo}
-              disabled={history.length < 2}
-              className="p-3 bg-white rounded-xl shadow-md text-gray-600 disabled:opacity-30"
-            >
-              <Undo size={24} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => galleryInputRef.current?.click()}
+                className="px-3 py-3 bg-white rounded-xl shadow-md text-gray-700 font-semibold flex items-center gap-2"
+                disabled={importingImage}
+              >
+                <ImagePlus size={20} />
+                Galerie
+              </button>
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="px-3 py-3 bg-white rounded-xl shadow-md text-gray-700 font-semibold flex items-center gap-2"
+                disabled={importingImage}
+              >
+                <Camera size={20} />
+                Appareil
+              </button>
+              <button
+                onClick={() => {
+                  setShowTools(!showTools);
+                  setShowColorPicker(false);
+                }}
+                className="px-4 py-3 bg-white rounded-xl shadow-md text-gray-700 font-semibold"
+              >
+                Outils
+              </button>
+              <button
+                onClick={undo}
+                disabled={history.length < 2}
+                className="p-3 bg-white rounded-xl shadow-md text-gray-600 disabled:opacity-30"
+              >
+                <Undo size={24} />
+              </button>
+            </div>
           </div>
+
+          {importingImage && (
+            <div className="bg-white rounded-xl shadow-inner px-3 py-2 mb-2 text-sm text-gray-600 flex items-center gap-2">
+              <Wand2 size={16} className="text-purple-500" />
+              Préparation de ta photo magique...
+            </div>
+          )}
 
           {/* Palette de couleurs déroulante */}
           {showColorPicker && (
@@ -375,6 +494,21 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
               </div>
             </div>
           )}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => handleFileSelection(event.target.files)}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => handleFileSelection(event.target.files)}
+          />
         </div>
       </div>
     );
@@ -453,13 +587,31 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
             ))}
           </div>
 
-          <button
-            onClick={undo}
-            disabled={history.length < 2}
-            className="p-2 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 transition disabled:opacity-50"
-          >
-            <Undo size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => galleryInputRef.current?.click()}
+              className="px-3 py-2 rounded-lg bg-white border-2 border-pink-200 text-pink-600 font-semibold flex items-center gap-2 shadow-sm hover:bg-pink-50 transition disabled:opacity-50"
+              disabled={importingImage}
+            >
+              <ImagePlus size={18} />
+              Depuis la galerie
+            </button>
+            <button
+              onClick={() => cameraInputRef.current?.click()}
+              className="px-3 py-2 rounded-lg bg-white border-2 border-blue-200 text-blue-600 font-semibold flex items-center gap-2 shadow-sm hover:bg-blue-50 transition disabled:opacity-50"
+              disabled={importingImage}
+            >
+              <Camera size={18} />
+              Prendre une photo
+            </button>
+            <button
+              onClick={undo}
+              disabled={history.length < 2}
+              className="p-2 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 transition disabled:opacity-50"
+            >
+              <Undo size={20} />
+            </button>
+          </div>
 
           <button
             onClick={clearCanvas}
@@ -468,6 +620,13 @@ export function DrawingCanvas({ onClose, onSaved, childId }: DrawingCanvasProps)
             <Trash2 size={20} />
           </button>
         </div>
+
+        {importingImage && (
+          <div className="mb-4 flex items-center justify-center gap-2 text-sm text-gray-600 bg-purple-50 border border-purple-100 rounded-xl px-3 py-2">
+            <Wand2 size={16} className="text-purple-500" />
+            Préparation de ta photo magique...
+          </div>
+        )}
 
         <div className="bg-white border-4 border-gray-300 rounded-xl overflow-hidden mb-4 flex justify-center">
           <canvas

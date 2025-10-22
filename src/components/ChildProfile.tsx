@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { DrawingCanvas } from './DrawingCanvas';
+import { PhotoCollageModal } from './PhotoCollageModal';
 
 type ChildProfileProps = {
   childId: string;
@@ -88,6 +89,7 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
   const [isFriend, setIsFriend] = useState(false);
   const [friendRequestPending, setFriendRequestPending] = useState(false);
   const [showDrawing, setShowDrawing] = useState(false);
+  const [showCollage, setShowCollage] = useState(false);
   const [drawingToDelete, setDrawingToDelete] = useState<string | null>(null);
   const [activityReactions, setActivityReactions] = useState<{[key: string]: {counts: {[key: string]: number}, userReactions: string[], activityId: string}}>({});
 
@@ -607,13 +609,22 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
 
             {currentProfile?.id === childId && (
               <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  onClick={() => setShowDrawing(true)}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
-                >
-                  <Palette size={18} />
-                  Nouveau dessin
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setShowDrawing(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
+                  >
+                    <Palette size={18} />
+                    Nouveau dessin
+                  </button>
+                  <button
+                    onClick={() => setShowCollage(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-purple-600 font-semibold border-2 border-purple-200 shadow hover:bg-purple-50 transition"
+                  >
+                    <Sparkles size={18} />
+                    Collation photo magique
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -680,13 +691,22 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
                   Crée un premier dessin pour démarrer ta collection et le partager quand tu seras prêt.
                 </p>
                 {currentProfile?.id === childId && (
-                  <button
-                    onClick={() => setShowDrawing(true)}
-                    className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
-                  >
-                    <Palette size={18} />
-                    Créer mon premier dessin
-                  </button>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
+                    <button
+                      onClick={() => setShowDrawing(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-semibold shadow-lg hover:shadow-xl transition"
+                    >
+                      <Palette size={18} />
+                      Créer mon premier dessin
+                    </button>
+                    <button
+                      onClick={() => setShowCollage(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-purple-600 font-semibold border-2 border-purple-200 shadow hover:bg-purple-50 transition"
+                    >
+                      <Sparkles size={18} />
+                      Composer une collation
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -952,6 +972,17 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
           onClose={() => setShowDrawing(false)}
           onSaved={() => {
             setShowDrawing(false);
+            loadProfileData();
+          }}
+        />
+      )}
+
+      {showCollage && (
+        <PhotoCollageModal
+          childId={childId}
+          onClose={() => setShowCollage(false)}
+          onSaved={() => {
+            setShowCollage(false);
             loadProfileData();
           }}
         />
