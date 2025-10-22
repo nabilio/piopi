@@ -462,7 +462,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                     <span className="text-4xl font-black text-amber-600">8€</span>
                     <span className="text-gray-600">/mois</span>
                   </div>
-                  <p className="text-sm text-gray-600">À partir de 5 enfants</p>
+                  <p className="text-sm text-gray-600">Jusqu'à 5 enfants</p>
                   <div className="mt-2 bg-amber-50 border border-amber-300 rounded-lg px-2 py-1">
                     <p className="text-xs text-amber-700 font-bold">+2€ par enfant supplémentaire</p>
                   </div>
@@ -470,7 +470,11 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">Enfants illimités</span>
+                    <span className="text-sm text-gray-700">Jusqu'à 5 enfants inclus</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Ajoutez des enfants supplémentaires à tout moment (+2€/enfant)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
