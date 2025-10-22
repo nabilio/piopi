@@ -4,12 +4,15 @@ import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useGamification } from '../hooks/useGamification';
+import { useBirthdayCompletion } from '../hooks/useBirthdayCompletion';
 import { AvatarDisplay } from './AvatarDisplay';
 import { BattleSetup } from './BattleSetup';
 import { BattleHub } from './BattleHub';
 import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
+import { BirthdayNotificationCard } from './BirthdayNotificationCard';
+import { ChildBirthdayModal } from './ChildBirthdayModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -24,8 +27,9 @@ type HomePageProps = {
 
 export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {} }: HomePageProps) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const { totalPoints } = useGamification();
+  const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile);
   const [children, setChildren] = useState<Profile[]>([]);
   const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -632,6 +636,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
           </div>
         )}
 
+        {birthdayCompletion.shouldPrompt && (
+          <div className="max-w-3xl mx-auto mb-6">
+            <BirthdayNotificationCard onAction={birthdayCompletion.openModal} />
+          </div>
+        )}
+
         {profile?.role !== 'child' && !selectedChild && profile?.role !== 'admin' && (
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -909,6 +919,17 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
       </div>
+
+      <ChildBirthdayModal
+        isOpen={birthdayCompletion.isModalOpen}
+        onClose={birthdayCompletion.closeModal}
+        onSubmit={birthdayCompletion.submitBirthday}
+        loading={birthdayCompletion.loading}
+        error={birthdayCompletion.error}
+        successMessage={birthdayCompletion.successMessage}
+        onResetFeedback={birthdayCompletion.resetFeedback}
+        defaultBirthday={profile?.birthday ?? null}
+      />
 
     </div>
   );
