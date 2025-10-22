@@ -34,6 +34,8 @@ export type Profile = {
   onboarding_completed?: boolean;
   avatar_url?: string;
   banned?: boolean;
+  birthday?: string | null;
+  birthday_completed?: boolean;
   created_at: string;
 };
 
@@ -92,4 +94,19 @@ export type CoachConversation = {
   subject?: string;
   created_at: string;
   updated_at: string;
+};
+
+
+export type BirthdayInvitation = {
+  id: string;
+  child_id: string;
+  host_child_id: string;
+  event_date: string;
+  location?: string | null;
+  message?: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  responded_at?: string | null;
+  created_at: string;
+  host_child_profile?: Pick<Profile, 'id' | 'full_name'> | null;
+  child_profile?: Pick<Profile, 'id' | 'full_name'> | null;
 };
