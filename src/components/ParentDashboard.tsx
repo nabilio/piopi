@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Users, TrendingUp, Clock, Award, Calendar, UserPlus, Book, BookPlus, CreditCard, Plus } from 'lucide-react';
+import { ArrowLeft, Users, TrendingUp, Clock, Award, Calendar, CalendarHeart, UserPlus, Book, BookPlus, CreditCard, Plus } from 'lucide-react';
 import { supabase, Profile, Progress } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AddChildModal } from './AddChildModal';
@@ -255,6 +255,25 @@ export function ParentDashboard({ onBack, onAddChild, onViewActivity, onProfileC
           </div>
         ) : (
           <div className="space-y-4 sm:space-y-8">
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-purple-600 shadow">
+                  <CalendarHeart size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Gestion des anniversaires</h3>
+                  <p className="text-sm text-gray-600">Consultez les invitations et les dates à venir pour tous vos enfants.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('parent-birthdays')}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-purple-600 shadow transition hover:bg-purple-50"
+              >
+                <CalendarHeart size={18} />
+                Ouvrir le suivi
+              </button>
+            </div>
             {childrenStats.map((stats) => (
               <div key={stats.child.id} className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 lg:p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
