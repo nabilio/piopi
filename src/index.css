@@ -1,0 +1,194 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Nunito', sans-serif;
+  }
+}
+
+.animate-bounce {
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(-5%);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
+
+.delay-300 {
+  animation-delay: 0.3s;
+}
+
+.delay-500 {
+  animation-delay: 0.5s;
+}
+
+.delay-700 {
+  animation-delay: 0.7s;
+}
+
+.delay-1000 {
+  animation-delay: 1s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Responsive utilities for mobile and tablets */
+@layer utilities {
+  /* Mobile-first responsive containers */
+  .responsive-container {
+    @apply container mx-auto px-3 sm:px-4 lg:px-6;
+  }
+
+  /* Responsive text sizes */
+  .responsive-heading {
+    @apply text-xl sm:text-2xl lg:text-3xl;
+  }
+
+  .responsive-subheading {
+    @apply text-lg sm:text-xl lg:text-2xl;
+  }
+
+  /* Responsive padding */
+  .responsive-padding {
+    @apply p-4 sm:p-6 lg:p-8;
+  }
+
+  /* Responsive grid for cards */
+  .responsive-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6;
+  }
+
+  /* Responsive flex layouts */
+  .responsive-flex {
+    @apply flex flex-col sm:flex-row gap-3 sm:gap-4;
+  }
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Make buttons more touch-friendly */
+  button {
+    min-height: 44px;
+  }
+
+  /* Improve spacing on small screens */
+  .container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Force stack on mobile for specific layouts */
+  .flex {
+    gap: 0.75rem;
+  }
+
+  /* Reduce excessive padding on mobile */
+  [class*="p-8"],
+  [class*="p-12"] {
+    padding: 1rem !important;
+  }
+
+  [class*="px-8"],
+  [class*="px-12"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  [class*="py-8"],
+  [class*="py-12"] {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  /* Adjust text sizes for mobile readability */
+  [class*="text-3xl"] {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
+
+  [class*="text-4xl"] {
+    font-size: 1.75rem !important;
+    line-height: 2.25rem !important;
+  }
+
+  [class*="text-5xl"] {
+    font-size: 2rem !important;
+    line-height: 2.5rem !important;
+  }
+
+  /* Make gaps smaller on mobile */
+  [class*="gap-6"] {
+    gap: 1rem !important;
+  }
+
+  [class*="gap-8"] {
+    gap: 1rem !important;
+  }
+
+  /* Ensure modals fit mobile screens */
+  .fixed > div {
+    max-height: 95vh;
+    overflow-y: auto;
+  }
+
+  /* Reduce excessive margins */
+  [class*="mb-8"] {
+    margin-bottom: 1.5rem !important;
+  }
+
+  [class*="mb-12"] {
+    margin-bottom: 2rem !important;
+  }
+
+  /* Make rounded corners smaller on mobile */
+  [class*="rounded-3xl"] {
+    border-radius: 1.25rem !important;
+  }
+}
+
+/* Tablet-specific adjustments */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* Moderate padding for tablets */
+  [class*="p-12"] {
+    padding: 2rem !important;
+  }
+
+  /* Adjust text for tablets */
+  [class*="text-4xl"] {
+    font-size: 2rem !important;
+  }
+
+  [class*="text-5xl"] {
+    font-size: 2.5rem !important;
+  }
+}
