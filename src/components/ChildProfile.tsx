@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, Star, Award, UserPlus, Clock, Target, Zap, Pencil, Palette, Trash2, Share2 } from 'lucide-react';
+import { Trophy, Star, Award, UserPlus, Clock, Target, Zap, Pencil, Palette, Trash2, Share2, Gamepad2, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
@@ -90,6 +90,32 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
   const [showDrawing, setShowDrawing] = useState(false);
   const [drawingToDelete, setDrawingToDelete] = useState<string | null>(null);
   const [activityReactions, setActivityReactions] = useState<{[key: string]: {counts: {[key: string]: number}, userReactions: string[], activityId: string}}>({});
+  const onlineGames = [
+    {
+      name: 'Kahoot!',
+      description: 'Quiz éducatifs multijoueurs pour réviser les matières en s\'amusant.',
+      url: 'https://kahoot.it/',
+      emoji: '🎯'
+    },
+    {
+      name: 'GeoGuessr',
+      description: 'Voyage virtuel collaboratif pour découvrir le monde et la géographie.',
+      url: 'https://www.geoguessr.com/',
+      emoji: '🗺️'
+    },
+    {
+      name: 'Code.org Play Lab',
+      description: 'Créer des histoires interactives et apprendre la logique de programmation.',
+      url: 'https://studio.code.org/projects/playlab',
+      emoji: '💡'
+    },
+    {
+      name: 'TypingClub',
+      description: 'Défis de dactylographie en ligne pour progresser ensemble et gagner en vitesse.',
+      url: 'https://www.typingclub.com/sportal/program-3.game',
+      emoji: '⌨️'
+    }
+  ];
 
   useEffect(() => {
     loadProfileData();
@@ -750,7 +776,7 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
           )}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-3xl shadow-lg p-6">
             <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
               <Award className="text-orange-500" />
@@ -815,6 +841,41 @@ export function ChildProfile({ childId, onBack, onStatusClick, onAvatarClick }: 
             ) : (
               <p className="text-gray-500 text-center py-8">Aucun record pour le moment</p>
             )}
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <Gamepad2 className="text-purple-500" />
+              Jeux en ligne éducatifs
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Invite tes amis pour apprendre en équipe grâce à ces jeux coopératifs et interactifs.
+            </p>
+            <div className="space-y-3">
+              {onlineGames.map((game) => (
+                <div
+                  key={game.name}
+                  className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="text-3xl" aria-hidden="true">{game.emoji}</span>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-800">{game.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{game.description}</p>
+                    </div>
+                    <a
+                      href={game.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-purple-600 hover:text-purple-700"
+                    >
+                      Jouer
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
