@@ -644,7 +644,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         {(profile?.role === 'child' || (profile?.role === 'parent' && selectedChild)) && (
           <div className="max-w-6xl mx-auto px-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-12">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={() => onProfileClick?.(profile?.id || '')}>
+            <div className="bg-gradient-to-br from-gray-500 to-gray-700 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={() => onProfileClick?.(profile?.id || '')}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
 
