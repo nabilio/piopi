@@ -1,23 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Rocket,
-  Star,
-  BookOpen,
-  Trophy,
-  UserPlus,
-  Plus,
-  ArrowLeft,
-  Sword,
-  Swords,
-  User,
-  Book,
-  Sparkles,
-  Bot,
-  BookPlus,
-  Gamepad2,
-  Users,
-  ExternalLink
-} from 'lucide-react';
+import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, Sword, Swords, User, Book, Sparkles, Bot, BookPlus } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -56,39 +38,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [unreadFriendRequests, setUnreadFriendRequests] = useState(0);
   const [showStories, setShowStories] = useState(false);
   const [showCustomLessons, setShowCustomLessons] = useState(false);
-  const [showOnlineGames, setShowOnlineGames] = useState(false);
   const [showAddChild, setShowAddChild] = useState(false);
   const [newChildData, setNewChildData] = useState({ full_name: '', age: '', grade_level: '' });
   const [addingChild, setAddingChild] = useState(false);
   const [adminViewLevel, setAdminViewLevel] = useState<string | null>(null);
 
   const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
-  const onlineGames = [
-    {
-      name: 'Kahoot!',
-      description: 'Quiz multijoueurs pour réviser ensemble et comparer tes scores.',
-      players: '3+ joueurs',
-      url: 'https://kahoot.it/'
-    },
-    {
-      name: 'GeoGuessr',
-      description: 'Explore le monde et coopère pour deviner les lieux sur la carte.',
-      players: '2-4 joueurs',
-      url: 'https://www.geoguessr.com/'
-    },
-    {
-      name: 'Code.org Play Lab',
-      description: 'Imagine une histoire interactive en programmant avec tes amis.',
-      players: 'Co-création',
-      url: 'https://studio.code.org/projects/playlab'
-    },
-    {
-      name: 'TypingClub',
-      description: 'Entraîne ta vitesse de frappe avec des défis coopératifs.',
-      players: 'Défis partagés',
-      url: 'https://www.typingclub.com/sportal/program-3.game'
-    }
-  ];
 
   useEffect(() => {
     loadSubjects();
@@ -563,67 +518,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     return <StoriesLibrary childId={selectedChild?.id} onClose={() => setShowStories(false)} />;
   }
 
-  if (showOnlineGames) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-slate-900">
-        <div className="container mx-auto px-4 py-8 max-w-5xl">
-          <button
-            onClick={() => setShowOnlineGames(false)}
-            className="mb-6 bg-white/10 px-6 py-3 rounded-full border border-white/30 backdrop-blur-sm hover:bg-white/20 transition font-semibold text-white flex items-center gap-2"
-          >
-            <ArrowLeft size={18} />
-            Retour à l'accueil
-          </button>
-
-          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-8 text-white">
-              <div className="inline-flex items-center justify-center bg-white/20 backdrop-blur-sm rounded-2xl p-4 mb-6">
-                <Gamepad2 size={42} />
-              </div>
-              <h1 className="text-3xl md:text-4xl font-black mb-3">Jeux en ligne éducatifs</h1>
-              <p className="text-base md:text-lg text-white/90 max-w-2xl">
-                Invite tes amis et apprenez ensemble grâce à ces jeux coopératifs et interactifs sélectionnés par l'équipe PioPi.
-              </p>
-            </div>
-
-            <div className="p-6 md:p-8 bg-gradient-to-br from-white via-white to-purple-50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {onlineGames.map(game => (
-                  <div
-                    key={game.name}
-                    className="bg-white rounded-2xl border border-purple-100 shadow-sm p-6 hover:shadow-lg transition"
-                  >
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">{game.name}</h3>
-                          <p className="text-sm text-gray-600 mt-2 leading-relaxed">{game.description}</p>
-                        </div>
-                        <a
-                          href={game.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 transition"
-                        >
-                          Jouer ensemble
-                          <ExternalLink size={16} />
-                        </a>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-purple-600">
-                        <Users size={16} />
-                        <span>{game.players}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
       <div className="hidden md:block bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 py-4 px-4 shadow-lg mb-6">
@@ -862,40 +756,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 <div className="flex items-center gap-2 text-white/80 text-sm">
                   <Trophy size={18} />
                   <span className="font-semibold">Deviens le champion!</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1"
-              onClick={() => setShowOnlineGames(true)}
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Gamepad2 size={30} className="text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Jeux en ligne</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Joue avec tes amis et progresse ensemble sur des jeux éducatifs.
-                </p>
-
-                <div className="space-y-2">
-                  {onlineGames.slice(0, 3).map(game => (
-                    <div
-                      key={game.name}
-                      className="flex items-center justify-between bg-white/15 backdrop-blur-sm px-3 py-2 rounded-xl text-xs md:text-sm"
-                    >
-                      <span className="font-semibold">{game.name}</span>
-                      <ExternalLink size={14} className="text-white/80" />
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
