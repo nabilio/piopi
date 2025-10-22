@@ -281,7 +281,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {/* Plan Basique */}
               <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-gray-200 hover:border-blue-400 transition">
                 <div className="text-center mb-6">
@@ -449,6 +449,53 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                 <button
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-xl transition shadow-lg"
+                >
+                  Choisir
+                </button>
+              </div>
+
+              {/* Plan Liberté */}
+              <div className="bg-white rounded-2xl shadow-xl p-6 border-2 border-amber-300 hover:border-amber-500 transition">
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-black text-gray-800 mb-2">Liberté</h3>
+                  <div className="flex items-baseline justify-center gap-1 mb-2">
+                    <span className="text-4xl font-black text-amber-600">8€</span>
+                    <span className="text-gray-600">/mois</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Jusqu'à 5 enfants</p>
+                  <div className="mt-2 bg-amber-50 border border-amber-300 rounded-lg px-2 py-1">
+                    <p className="text-xs text-amber-700 font-bold">+2€ par enfant supplémentaire</p>
+                  </div>
+                </div>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Enfants illimités</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Tous les cours et exercices</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Suivi de progression avancé</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Mode bataille</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Réseau social sécurisé</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Support prioritaire VIP</span>
+                  </li>
+                </ul>
+                <button
+                  onClick={onRegisterClick}
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
                   Choisir
                 </button>

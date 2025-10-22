@@ -158,25 +158,41 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         throw new Error('Aucun abonnement trouvé');
       }
 
-      const getPlanPrice = (childrenCount: number): number => {
-        const prices: Record<number, number> = {
-          1: 2,
-          2: 3,
-          3: 5,
-          4: 6
+      const recordedChildrenCount = subscription.children_count ?? 0;
+      const actualChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount);
+      const oldChildrenCount = Math.max(recordedChildrenCount, actualChildrenCount, 1);
+      const newChildrenCount = selectedPlan.maxChildren === 999
+        ? Math.max(actualChildrenCount, 5)
+        : selectedPlan.maxChildren;
+
+      const computePlanPrice = (plan: Plan, childrenCount: number): number => {
+        if (plan.id === 'liberte') {
+          const billedChildren = Math.max(childrenCount, 5);
+          return 8 + Math.max(billedChildren - 5, 0) * 2;
+        }
+
+        const priceByPlan: Record<string, number> = {
+          basic: 2,
+          duo: 3,
+          family: 5,
+          premium: 6,
         };
-        return prices[childrenCount] || childrenCount * 2;
+
+        return priceByPlan[plan.id] ?? plan.pricePerMonth;
       };
 
-      const oldPrice = getPlanPrice(subscription.children_count);
-      const newPrice = selectedPlan.pricePerMonth;
+      const oldPrice = computePlanPrice(currentPlan, oldChildrenCount);
+      const newPrice = computePlanPrice(selectedPlan, newChildrenCount);
 
       const isReactivation = selectedPlan.id === currentPlan.id && subscription.status === 'cancelled';
+      const isUpgrade = !isReactivation && (newChildrenCount > oldChildrenCount || newPrice > oldPrice);
+      const isDowngrade = !isReactivation && !isUpgrade && (newChildrenCount < oldChildrenCount || newPrice < oldPrice);
+      const historyAction = isReactivation ? 'reactivated' : 'updated';
 
       const { error: updateError } = await supabase
         .from('subscriptions')
         .update({
-          children_count: selectedPlan.maxChildren === 999 ? subscription.children_count : selectedPlan.maxChildren,
+          children_count: newChildrenCount,
           plan_type: selectedPlan.id,
           status: 'active'
         })
@@ -188,10 +204,10 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         .from('subscription_history')
         .insert({
           user_id: parentId,
-          children_count: selectedPlan.maxChildren === 999 ? subscription.children_count : selectedPlan.maxChildren,
+          children_count: newChildrenCount,
           price: newPrice,
           plan_type: selectedPlan.id,
-          action_type: isReactivation ? 'reactivated' : 'updated',
+          action_type: historyAction,
           notes: isReactivation
             ? `Réactivation du plan ${selectedPlan.name} (${newPrice}€/mois)`
             : `Passage de ${currentPlan.name} (${oldPrice}€/mois) à ${selectedPlan.name} (${newPrice}€/mois)`
@@ -202,9 +218,6 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         const parentName = profile?.full_name || 'Parent';
 
         if (recipientEmail) {
-          const isUpgrade = newChildrenCount > oldChildrenCount;
-          const isDowngrade = newChildrenCount < oldChildrenCount;
-
           let template = 'subscription_upgraded';
           let subject = '✨ Abonnement mis à jour - PioPi';
 

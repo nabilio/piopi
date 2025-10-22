@@ -143,14 +143,22 @@ function AppContent() {
       window.history.replaceState({}, document.title, newUrl);
     }
 
-    if (urlParams.get('reactivate') === 'true' || urlParams.get('settings') === 'subscription') {
+    const wantsReactivate = urlParams.get('reactivate') === 'true';
+    const wantsSubscriptionSettings = urlParams.get('settings') === 'subscription';
+
+    if (wantsReactivate || wantsSubscriptionSettings) {
       if (user && profile?.role === 'parent') {
         setSettingsInitialTab('subscription');
-        setView('settings');
+        setView(wantsReactivate ? 'upgrade-plan' : 'settings');
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
       } else {
-        localStorage.setItem('pendingReactivate', 'true');
+        if (wantsReactivate) {
+          localStorage.setItem('pendingReactivate', 'true');
+        }
+        if (wantsSubscriptionSettings) {
+          localStorage.setItem('pendingSubscriptionSettings', 'true');
+        }
       }
     }
   }, [user, profile]);
@@ -158,8 +166,14 @@ function AppContent() {
   useEffect(() => {
     if (user && profile?.role === 'parent') {
       const pendingReactivate = localStorage.getItem('pendingReactivate');
+      const pendingSubscriptionSettings = localStorage.getItem('pendingSubscriptionSettings');
+
       if (pendingReactivate === 'true') {
         localStorage.removeItem('pendingReactivate');
+        setSettingsInitialTab('subscription');
+        setView('upgrade-plan');
+      } else if (pendingSubscriptionSettings === 'true') {
+        localStorage.removeItem('pendingSubscriptionSettings');
         setSettingsInitialTab('subscription');
         setView('settings');
       }
