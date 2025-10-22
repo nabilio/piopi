@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, Sword, Swords, User, Book, Sparkles, Bot, BookPlus } from 'lucide-react';
+import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import { BattleHub } from './BattleHub';
 import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
+import { DrawingStudioModal } from './DrawingStudioModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -42,6 +43,10 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [newChildData, setNewChildData] = useState({ full_name: '', age: '', grade_level: '' });
   const [addingChild, setAddingChild] = useState(false);
   const [adminViewLevel, setAdminViewLevel] = useState<string | null>(null);
+  const [showDrawingStudio, setShowDrawingStudio] = useState(false);
+  const [drawingStats, setDrawingStats] = useState({ total: 0, shared: 0 });
+
+  const currentChildId = selectedChild?.id || profile?.id || null;
 
   const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
@@ -55,8 +60,9 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     loadUnreadStories();
     loadNewCustomLessons();
     loadUnreadFriendRequests();
+    loadDrawingStats();
 
-    const currentUserId = selectedChild?.id || profile?.id;
+    const currentUserId = currentChildId;
     if (!currentUserId) return;
 
     const notificationSubscription = supabase
@@ -115,10 +121,13 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     };
   }, [profile, selectedChild, adminViewLevel]);
 
-  async function loadBattleStats() {
-    if (!profile?.id) return;
+  useEffect(() => {
+    loadDrawingStats();
+  }, [currentChildId]);
 
-    const currentUserId = selectedChild?.id || profile.id;
+  async function loadBattleStats() {
+    const currentUserId = currentChildId;
+    if (!currentUserId) return;
 
     const { data, error } = await supabase
       .from('battles')
@@ -133,9 +142,8 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   async function loadUnreadBattleNotifications() {
-    if (!profile?.id) return;
-
-    const currentUserId = selectedChild?.id || profile.id;
+    const currentUserId = currentChildId;
+    if (!currentUserId) return;
     console.log('🔔 Loading battle notifications for user:', currentUserId);
 
     const { data: profileData } = await supabase
@@ -209,8 +217,8 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   async function loadUnreadStories() {
-    if (!profile?.id) return;
-    const currentUserId = selectedChild?.id || profile.id;
+    const currentUserId = currentChildId;
+    if (!currentUserId) return;
 
     console.log('📖 Loading stories for user:', currentUserId);
 
@@ -243,8 +251,8 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   async function loadNewCustomLessons() {
-    if (!profile?.id) return;
-    const currentUserId = selectedChild?.id || profile.id;
+    const currentUserId = currentChildId;
+    if (!currentUserId) return;
 
     const { data: profileData } = await supabase
       .from('profiles')
@@ -270,8 +278,8 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   async function loadUnreadFriendRequests() {
-    if (!profile?.id) return;
-    const currentUserId = selectedChild?.id || profile.id;
+    const currentUserId = currentChildId;
+    if (!currentUserId) return;
 
     const { data: friendRequestNotifs } = await supabase
       .from('friend_request_notifications')
@@ -280,6 +288,27 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
       .eq('is_read', false);
 
     setUnreadFriendRequests(friendRequestNotifs?.length || 0);
+  }
+
+  async function loadDrawingStats() {
+    if (!currentChildId) {
+      setDrawingStats({ total: 0, shared: 0 });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('drawings')
+      .select('id, is_shared')
+      .eq('child_id', currentChildId);
+
+    if (error) {
+      console.error('Error loading drawing stats:', error);
+      return;
+    }
+
+    const total = data?.length || 0;
+    const shared = (data || []).filter(d => d.is_shared).length;
+    setDrawingStats({ total, shared });
   }
 
   async function loadChildren() {
@@ -516,11 +545,11 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   if (showCustomLessons) {
-    return <CustomLessonsChild childId={profile?.id} onClose={() => setShowCustomLessons(false)} />;
+    return <CustomLessonsChild childId={currentChildId ?? undefined} onClose={() => setShowCustomLessons(false)} />;
   }
 
   if (showStories) {
-    return <StoriesLibrary childId={selectedChild?.id} onClose={() => setShowStories(false)} />;
+    return <StoriesLibrary childId={currentChildId ?? undefined} onClose={() => setShowStories(false)} />;
   }
 
   return (
@@ -709,7 +738,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
             </div>
 
             <div className="bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = selectedChild?.id || profile?.id;
+              const currentUserId = currentChildId;
               if (currentUserId) {
                 const timestamp = new Date().toISOString();
                 console.log('⚔️ Updating last_battle_hub_visit for user:', currentUserId, 'to:', timestamp);
@@ -766,7 +795,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
             </div>
 
             <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = selectedChild?.id || profile?.id;
+              const currentUserId = currentChildId;
               if (currentUserId) {
                 const timestamp = new Date().toISOString();
                 console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
@@ -812,16 +841,58 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                   Crée et lis tes aventures personnalisées
                 </p>
 
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <Sparkles size={18} />
-                  <span className="font-semibold">3 histoires par jour</span>
+              <div className="flex items-center gap-2 text-white/80 text-sm">
+                <Sparkles size={18} />
+                <span className="font-semibold">3 histoires par jour</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`bg-gradient-to-br from-pink-500 to-fuchsia-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden transition-all ${
+              currentChildId ? 'cursor-pointer hover:shadow-3xl hover:-translate-y-1' : 'opacity-70 cursor-not-allowed'
+            }`}
+            onClick={() => {
+              if (!currentChildId) return;
+              setShowDrawingStudio(true);
+            }}
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+
+            <div className="relative z-10">
+              <div className="relative inline-block mb-4">
+                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
+                <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                  <Palette size={32} className="text-white" />
+                </div>
+              </div>
+
+              <h2 className="text-xl md:text-2xl font-black mb-2">Atelier de dessin</h2>
+              <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
+                Crée ton classeur de chefs-d'œuvre et partage-les !
+              </p>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 text-white/80 text-sm">
+                <div className="flex items-center gap-2">
+                  <Palette size={18} />
+                  <span className="font-semibold">
+                    {drawingStats.total} dessin{drawingStats.total > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                  <Share2 size={18} />
+                  <span className="font-semibold">
+                    {drawingStats.shared} partagé{drawingStats.shared > 1 ? 's' : ''}
+                  </span>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoachClick}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoachClick}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
 
               <div className="relative z-10">
                 <div className="relative inline-block mb-4">
@@ -844,13 +915,13 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-violet-500 to-purple-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = selectedChild?.id || profile?.id;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
-                const { error } = await supabase
-                  .from('profiles')
+          <div className="bg-gradient-to-br from-violet-500 to-purple-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
+            const currentUserId = currentChildId;
+            if (currentUserId) {
+              const timestamp = new Date().toISOString();
+              console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
+              const { error } = await supabase
+                .from('profiles')
                   .update({ last_custom_lessons_visit: timestamp })
                   .eq('id', currentUserId);
 
@@ -909,6 +980,14 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
       </div>
+
+      {showDrawingStudio && currentChildId && (
+        <DrawingStudioModal
+          childId={currentChildId}
+          onClose={() => setShowDrawingStudio(false)}
+          onUpdated={(stats) => setDrawingStats(stats)}
+        />
+      )}
 
     </div>
   );
