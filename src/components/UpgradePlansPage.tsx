@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Crown, Users, Sparkles, ArrowLeft } from 'lucide-react';
+import { Check, Crown, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
@@ -80,8 +80,7 @@ const PLANS: Plan[] = [
     maxChildren: 999,
     pricePerMonth: 8,
     features: [
-      'Enfants illimités (5+)',
-      'Base 4 enfants à 6€',
+      'Jusqu\'à 5 enfants inclus',
       '+2€ par enfant supplémentaire',
       'Tous les cours et exercices',
       'Suivi de progression avancé',
@@ -92,6 +91,43 @@ const PLANS: Plan[] = [
     badge: 'Maximum de flexibilité'
   }
 ];
+
+const BASE_PLAN_PRICES: Record<string, number> = {
+  basic: 2,
+  duo: 3,
+  family: 5,
+  premium: 6,
+  liberte: 8
+};
+
+const computePlanPrice = (plan: Plan, childrenCount: number): number => {
+  if (plan.id === 'liberte') {
+    const billedChildren = Math.max(childrenCount, 5);
+    return BASE_PLAN_PRICES.liberte + Math.max(billedChildren - 5, 0) * 2;
+  }
+
+  return BASE_PLAN_PRICES[plan.id] ?? plan.pricePerMonth;
+};
+
+const getBillingChildrenCount = (plan: Plan, actualChildrenCount: number): number => {
+  if (plan.id === 'liberte') {
+    return Math.max(actualChildrenCount, 5);
+  }
+
+  return Math.max(plan.maxChildren, 1);
+};
+
+const formatPlanCapacity = (plan: Plan): string => {
+  if (plan.id === 'liberte') {
+    return "Jusqu'à 5 enfants (+2€/enfant supplémentaire)";
+  }
+
+  if (plan.maxChildren === 1) {
+    return '1 enfant';
+  }
+
+  return `Jusqu'à ${plan.maxChildren} enfants`;
+};
 
 type UpgradePlansPageProps = {
   currentChildrenCount: number;
@@ -107,6 +143,15 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   const [loading, setLoading] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<Plan>(PLANS[0]);
   const [subscription, setSubscription] = useState<any>(null);
+
+  const recordedChildrenCount = subscription?.children_count ?? 0;
+  const effectiveChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount, 1);
+  const billedCurrentChildren = getBillingChildrenCount(currentPlan, effectiveChildrenCount);
+  const currentPlanPrice = computePlanPrice(currentPlan, billedCurrentChildren);
+  const billedSelectedChildren = selectedPlan ? getBillingChildrenCount(selectedPlan, effectiveChildrenCount) : null;
+  const selectedPlanPrice = selectedPlan && billedSelectedChildren !== null
+    ? computePlanPrice(selectedPlan, billedSelectedChildren)
+    : null;
 
   useEffect(() => {
     async function loadSubscription() {
@@ -159,34 +204,16 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
       }
 
       const recordedChildrenCount = subscription.children_count ?? 0;
-      const actualChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount);
-      const oldChildrenCount = Math.max(recordedChildrenCount, actualChildrenCount, 1);
-      const newChildrenCount = selectedPlan.maxChildren === 999
-        ? Math.max(actualChildrenCount, 5)
-        : selectedPlan.maxChildren;
-
-      const computePlanPrice = (plan: Plan, childrenCount: number): number => {
-        if (plan.id === 'liberte') {
-          const billedChildren = Math.max(childrenCount, 5);
-          return 8 + Math.max(billedChildren - 5, 0) * 2;
-        }
-
-        const priceByPlan: Record<string, number> = {
-          basic: 2,
-          duo: 3,
-          family: 5,
-          premium: 6,
-        };
-
-        return priceByPlan[plan.id] ?? plan.pricePerMonth;
-      };
-
-      const oldPrice = computePlanPrice(currentPlan, oldChildrenCount);
-      const newPrice = computePlanPrice(selectedPlan, newChildrenCount);
+      const actualChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount, 1);
+      const billedCurrentChildren = getBillingChildrenCount(currentPlan, actualChildrenCount);
+      const billedSelectedChildren = getBillingChildrenCount(selectedPlan, actualChildrenCount);
+      const oldPrice = computePlanPrice(currentPlan, billedCurrentChildren);
+      const newPrice = computePlanPrice(selectedPlan, billedSelectedChildren);
+      const newChildrenCount = billedSelectedChildren;
 
       const isReactivation = selectedPlan.id === currentPlan.id && subscription.status === 'cancelled';
-      const isUpgrade = !isReactivation && (newChildrenCount > oldChildrenCount || newPrice > oldPrice);
-      const isDowngrade = !isReactivation && !isUpgrade && (newChildrenCount < oldChildrenCount || newPrice < oldPrice);
+      const isUpgrade = !isReactivation && (newChildrenCount > billedCurrentChildren || newPrice > oldPrice);
+      const isDowngrade = !isReactivation && !isUpgrade && (newChildrenCount < billedCurrentChildren || newPrice < oldPrice);
       const historyAction = isReactivation ? 'reactivated' : 'updated';
 
       const { error: updateError } = await supabase
@@ -255,7 +282,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
               template: template,
               data: {
                 parentName: parentName,
-                oldChildrenCount: oldChildrenCount,
+                oldChildrenCount: billedCurrentChildren,
                 newChildrenCount: newChildrenCount,
                 oldPrice: oldPrice,
                 newPrice: newPrice,
@@ -289,6 +316,11 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   }
 
   if (confirming && selectedPlan) {
+    const nextPlanPrice = selectedPlanPrice ?? computePlanPrice(
+      selectedPlan,
+      getBillingChildrenCount(selectedPlan, effectiveChildrenCount)
+    );
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
@@ -314,13 +346,13 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Plan actuel</p>
                   <p className="text-xl font-bold text-gray-800">{currentPlan.name}</p>
-                  <p className="text-sm text-gray-600">{currentPlan.pricePerMonth}€/mois</p>
+                  <p className="text-sm text-gray-600">{currentPlanPrice}€/mois</p>
                 </div>
                 <div className="text-3xl">→</div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Nouveau plan</p>
                   <p className="text-xl font-bold text-blue-600">{selectedPlan.name}</p>
-                  <p className="text-sm text-gray-600">{selectedPlan.pricePerMonth}€/mois</p>
+                  <p className="text-sm text-gray-600">{nextPlanPrice}€/mois</p>
                 </div>
               </div>
 
@@ -330,29 +362,21 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                   <li className="flex items-start gap-2">
                     <Check size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">
-                      Capacité : {currentPlan.maxChildren === 999 ? 'Illimité' : `${currentPlan.maxChildren} enfant(s)`} → {selectedPlan.maxChildren === 999 ? 'Illimité' : `${selectedPlan.maxChildren} enfant(s)`}
+                      Capacité : {formatPlanCapacity(currentPlan)} → {formatPlanCapacity(selectedPlan)}
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
                     <span className="text-gray-700">
-                      Tarif : {currentPlan.pricePerMonth}€/mois → {selectedPlan.pricePerMonth}€/mois
+                      Tarif : {currentPlanPrice}€/mois → {nextPlanPrice}€/mois
                     </span>
                   </li>
-                  {selectedPlan.pricePerMonth > currentPlan.pricePerMonth && (
-                    <li className="flex items-start gap-2">
-                      <Check size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-gray-700">
-                        Économie de {((1 - selectedPlan.pricePerMonth / (selectedPlan.maxChildren === 999 ? currentChildrenCount + 1 : selectedPlan.maxChildren) / 2) * 100).toFixed(0)}% par enfant
-                      </span>
-                    </li>
-                  )}
                 </ul>
               </div>
 
               <div className="text-center text-sm text-gray-600">
                 <p>Le changement sera effectif immédiatement.</p>
-                <p className="mt-1">Votre prochain paiement sera de <strong>{selectedPlan.pricePerMonth}€</strong>.</p>
+                <p className="mt-1">Votre prochain paiement sera de <strong>{nextPlanPrice}€</strong>.</p>
               </div>
             </div>
 
@@ -447,7 +471,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                       <span className="text-gray-600">/mois</span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
-                      {plan.maxChildren === 999 ? 'Enfants illimités' : `Jusqu'à ${plan.maxChildren} enfant${plan.maxChildren > 1 ? 's' : ''}`}
+                      {formatPlanCapacity(plan)}
                     </p>
                   </div>
 
@@ -495,8 +519,8 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
               className="w-full py-5 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold text-lg rounded-xl transition shadow-xl"
             >
               {selectedPlan.id === currentPlan.id && subscription?.status === 'cancelled'
-                ? `Réactiver ${selectedPlan.name} - ${selectedPlan.pricePerMonth}€/mois`
-                : `Continuer avec ${selectedPlan.name} - ${selectedPlan.pricePerMonth}€/mois`}
+                ? `Réactiver ${selectedPlan.name} - ${selectedPlanPrice ?? selectedPlan.pricePerMonth}€/mois`
+                : `Continuer avec ${selectedPlan.name} - ${selectedPlanPrice ?? selectedPlan.pricePerMonth}€/mois`}
             </button>
           </div>
         )}

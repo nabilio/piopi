@@ -470,7 +470,11 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">Enfants illimités</span>
+                    <span className="text-sm text-gray-700">Jusqu'à 5 enfants inclus</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-700">Ajoutez des enfants supplémentaires à tout moment (+2€/enfant)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
