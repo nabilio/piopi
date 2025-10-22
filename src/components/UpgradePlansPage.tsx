@@ -424,7 +424,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-8">
           {PLANS.map((plan) => {
             const isCurrentPlan = plan.id === currentPlan.id;
             const isActivePlan = isCurrentPlan && subscription?.status === 'active';
@@ -462,12 +462,12 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                   </div>
                 )}
 
-                <div className="p-6 pt-12">
-                  <h3 className="text-2xl font-black text-gray-800 mb-2">{plan.name}</h3>
+                <div className="p-5 pt-10">
+                  <h3 className="text-xl font-black text-gray-800 mb-2">{plan.name}</h3>
 
-                  <div className="mb-6">
+                  <div className="mb-5">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-black text-gray-800">{plan.pricePerMonth}€</span>
+                      <span className="text-3xl font-black text-gray-800">{plan.pricePerMonth}€</span>
                       <span className="text-gray-600">/mois</span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
@@ -475,7 +475,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                     </p>
                   </div>
 
-                  <ul className="space-y-3 mb-6">
+                  <ul className="space-y-2.5 mb-5">
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-start gap-2">
                         <Check size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
@@ -492,7 +492,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
 
                   <button
                     disabled={isTooSmall || isActivePlan}
-                    className={`w-full py-3 rounded-xl font-bold transition ${
+                    className={`w-full py-2.5 rounded-xl font-bold transition ${
                       isSelected
                         ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white'
                         : isActivePlan
