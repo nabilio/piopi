@@ -24,6 +24,7 @@ export function DrawingStudioModal({ childId, onClose, onUpdated }: DrawingStudi
   const [loading, setLoading] = useState(true);
   const [showCanvas, setShowCanvas] = useState(false);
   const [drawingToDelete, setDrawingToDelete] = useState<string | null>(null);
+  const [selectedDrawing, setSelectedDrawing] = useState<Drawing | null>(null);
   const { profile } = useAuth();
   const { showToast } = useToast();
 
@@ -163,9 +164,23 @@ export function DrawingStudioModal({ childId, onClose, onUpdated }: DrawingStudi
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {drawings.map((drawing) => (
-                <div key={drawing.id} className="bg-white border-2 border-pink-100 rounded-2xl shadow-sm hover:shadow-md transition overflow-hidden flex flex-col">
-                  <div className="relative bg-gray-50">
-                    <img src={drawing.drawing_data} alt={drawing.title} className="w-full h-48 object-contain" />
+                <div key={drawing.id} className="bg-white border-2 border-pink-100 rounded-2xl shadow-sm hover:shadow-lg transition overflow-hidden flex flex-col">
+                  <div className="relative bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 p-[3px]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDrawing(drawing)}
+                      className="group relative block w-full rounded-[14px] overflow-hidden focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                      aria-label={`Voir le dessin ${drawing.title || 'Mon dessin'} en grand format`}
+                    >
+                      <div className="absolute inset-0 rounded-[14px] bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity mix-blend-screen" />
+                      <img
+                        src={drawing.drawing_data}
+                        alt={drawing.title}
+                        className="relative w-full h-48 object-contain rounded-[12px] bg-white"
+                        style={{ filter: 'contrast(1.05) saturate(1.15)' }}
+                      />
+                      <div className="pointer-events-none absolute inset-0 rounded-[12px] ring-1 ring-white/60 group-hover:ring-2 group-hover:ring-purple-200 transition" />
+                    </button>
                     <div className="absolute top-3 right-3">
                       <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow-md ${drawing.is_shared ? 'bg-purple-500 text-white' : 'bg-gray-900/70 text-white'}`}>
                         {drawing.is_shared ? <Share2 size={14} /> : <Lock size={14} />}
@@ -241,6 +256,41 @@ export function DrawingStudioModal({ childId, onClose, onUpdated }: DrawingStudi
               >
                 Supprimer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedDrawing && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80">
+          <div className="relative bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl p-4 sm:p-6 max-w-5xl w-full">
+            <button
+              type="button"
+              onClick={() => setSelectedDrawing(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/90 text-gray-700 hover:bg-white transition"
+              aria-label="Fermer la prévisualisation du dessin"
+            >
+              <X size={20} />
+            </button>
+            <div className="bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 p-[5px] rounded-2xl">
+              <div className="bg-white rounded-2xl p-4">
+                <img
+                  src={selectedDrawing.drawing_data}
+                  alt={selectedDrawing.title}
+                  className="max-h-[70vh] mx-auto w-full object-contain rounded-xl"
+                  style={{ filter: 'contrast(1.08) saturate(1.2)' }}
+                />
+              </div>
+            </div>
+            <div className="mt-4 text-center text-white">
+              <h3 className="text-xl font-semibold">{selectedDrawing.title || 'Mon dessin'}</h3>
+              <p className="text-sm text-white/80">
+                {new Date(selectedDrawing.created_at).toLocaleDateString('fr-FR', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </p>
             </div>
           </div>
         </div>
