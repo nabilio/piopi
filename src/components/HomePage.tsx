@@ -377,7 +377,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
       return;
     }
 
-    setSubjects(data || []);
+    const filteredSubjects = (data || []).filter(subject => {
+      const normalizedName = subject.name.trim().toLowerCase();
+      return normalizedName !== 'jeux en ligne' && normalizedName !== 'online games';
+    });
+
+    setSubjects(filteredSubjects);
   }
 
   if (profile?.role === 'parent' && !selectedChild) {
