@@ -12,6 +12,7 @@ import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
 import { BirthdayNotificationCard } from './BirthdayNotificationCard';
+import { DrawingStudioModal } from './DrawingStudioModal';
 import { ChildBirthdayModal } from './ChildBirthdayModal';
 
 type HomePageProps = {
@@ -29,7 +30,9 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const { profile, user, refreshProfile } = useAuth();
   const { totalPoints } = useGamification();
-  const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile);
+  const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile, {
+    childIdOverride: selectedChild?.id ?? undefined,
+  });
   const [children, setChildren] = useState<Profile[]>([]);
   const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -50,6 +53,11 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [drawingStats, setDrawingStats] = useState({ total: 0, shared: 0 });
 
   const currentChildId = selectedChild?.id || profile?.id || null;
+  const birthdayProfile = selectedChild ?? profile ?? null;
+  const showBirthdayCard = birthdayProfile?.role === 'child';
+  const canManageBirthday = !!currentChildId && showBirthdayCard;
+  const birthdayValue = birthdayProfile?.birthday ?? null;
+  const isBirthdayCompleted = Boolean(birthdayProfile?.birthday_completed);
 
   const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
@@ -547,6 +555,16 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     );
   }
 
+  if (showDrawingStudio && currentChildId) {
+    return (
+      <DrawingStudioModal
+        childId={currentChildId}
+        onClose={() => setShowDrawingStudio(false)}
+        onUpdated={(stats) => setDrawingStats(stats)}
+      />
+    );
+  }
+
   if (showCustomLessons) {
     return <CustomLessonsChild childId={currentChildId ?? undefined} onClose={() => setShowCustomLessons(false)} />;
   }
@@ -661,12 +679,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 ))}
               </div>
             </div>
-          </div>
-        )}
-
-        {birthdayCompletion.shouldPrompt && (
-          <div className="max-w-3xl mx-auto mb-6">
-            <BirthdayNotificationCard onAction={birthdayCompletion.openModal} />
           </div>
         )}
 
@@ -803,11 +815,11 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = currentChildId;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
+          <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
+            const currentUserId = currentChildId;
+            if (currentUserId) {
+              const timestamp = new Date().toISOString();
+              console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
                 const { error } = await supabase
                   .from('profiles')
                   .update({ last_stories_visit: timestamp })
@@ -856,6 +868,16 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
               </div>
             </div>
           </div>
+
+          {showBirthdayCard && (
+            <BirthdayNotificationCard
+              onAction={birthdayCompletion.openModal}
+              birthday={birthdayValue}
+              isCompleted={isBirthdayCompleted}
+              showReminder={birthdayCompletion.shouldPrompt}
+              disabled={!canManageBirthday}
+            />
+          )}
 
           <div
             className={`bg-gradient-to-br from-pink-500 to-fuchsia-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden transition-all ${
@@ -998,7 +1020,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         error={birthdayCompletion.error}
         successMessage={birthdayCompletion.successMessage}
         onResetFeedback={birthdayCompletion.resetFeedback}
-        defaultBirthday={profile?.birthday ?? null}
+        defaultBirthday={birthdayProfile?.birthday ?? null}
       />
 
     </div>

@@ -25,9 +25,13 @@ function ChildBirthdayFlowHarness({ initialProfile }: HarnessProps) {
 
   return (
     <div>
-      {birthdayCompletion.shouldPrompt && (
-        <BirthdayNotificationCard onAction={birthdayCompletion.openModal} />
-      )}
+      <BirthdayNotificationCard
+        onAction={birthdayCompletion.openModal}
+        birthday={profile.birthday}
+        isCompleted={Boolean(profile.birthday_completed)}
+        showReminder={birthdayCompletion.shouldPrompt}
+        disabled={false}
+      />
       <ChildBirthdayModal
         isOpen={birthdayCompletion.isModalOpen}
         onClose={birthdayCompletion.closeModal}
@@ -77,7 +81,7 @@ describe('Flux anniversaire enfant/parent', () => {
     const { unmount } = render(<ChildBirthdayFlowHarness initialProfile={childProfile} />);
 
     expect(
-      screen.getByText("Partage ta date d'anniversaire avec ton parent 🎉"),
+      screen.getByText(/Ajoute ta date d'anniversaire pour débloquer des surprises/i),
     ).toBeInTheDocument();
 
     const dateInput = await screen.findByLabelText("Date d'anniversaire");
@@ -93,8 +97,8 @@ describe('Flux anniversaire enfant/parent', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText("Partage ta date d'anniversaire avec ton parent 🎉"),
-      ).not.toBeInTheDocument();
+        screen.getByText(/Anniversaire enregistré/i),
+      ).toBeInTheDocument();
     });
 
     unmount();
