@@ -849,12 +849,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
           </div>
         )}
 
-        {birthdayCompletion.shouldPrompt && (
-          <div className="max-w-3xl mx-auto mb-6">
-            <BirthdayNotificationCard onAction={birthdayCompletion.openModal} />
-          </div>
-        )}
-
         {profile?.role !== 'child' && !selectedChild && profile?.role !== 'admin' && (
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -1016,6 +1010,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 }
                 className="min-h-[260px]"
               />
+              {birthdayCompletion.shouldPrompt ? (
+                <BirthdayNotificationCard
+                  onAction={birthdayCompletion.openModal}
+                  className="min-h-[260px]"
+                />
+              ) : null}
             </div>
           </div>
         )}

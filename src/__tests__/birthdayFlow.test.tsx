@@ -77,7 +77,7 @@ describe('Flux anniversaire enfant/parent', () => {
     const { unmount } = render(<ChildBirthdayFlowHarness initialProfile={childProfile} />);
 
     expect(
-      screen.getByText("Partage ta date d'anniversaire avec ton parent 🎉"),
+      screen.getByText("C'est quand ta journée magique ?"),
     ).toBeInTheDocument();
 
     const dateInput = await screen.findByLabelText("Date d'anniversaire");
@@ -93,7 +93,7 @@ describe('Flux anniversaire enfant/parent', () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText("Partage ta date d'anniversaire avec ton parent 🎉"),
+        screen.queryByText("C'est quand ta journée magique ?"),
       ).not.toBeInTheDocument();
     });
 
