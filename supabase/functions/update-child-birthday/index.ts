@@ -71,10 +71,14 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Supabase service is not configured correctly');
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -148,7 +152,15 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       .eq('id', targetChildId);
 
     if (updateError) {
-      throw updateError;
+      const message = typeof updateError.message === 'string'
+        ? updateError.message
+        : 'Failed to update birthday';
+      const code = 'code' in updateError ? String(updateError.code) : undefined;
+      const error = new Error(message);
+      if (code) {
+        (error as Error & { code?: string }).code = code;
+      }
+      throw error;
     }
 
     return new Response(
@@ -167,7 +179,33 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
     );
   } catch (error) {
     console.error('update-child-birthday error:', error);
-    const message = error instanceof Error ? error.message : 'Unexpected error';
+
+    let message: string;
+    let code: string | undefined;
+
+    if (error instanceof Error) {
+      message = error.message || 'Unexpected error';
+      code = (error as Error & { code?: string }).code;
+    } else if (error && typeof error === 'object') {
+      const candidate = error as { message?: unknown; code?: unknown };
+      message = typeof candidate.message === 'string' && candidate.message.trim() !== ''
+        ? candidate.message
+        : 'Unexpected error';
+      code = typeof candidate.code === 'string' ? candidate.code : undefined;
+    } else if (typeof error === 'string' && error.trim() !== '') {
+      message = error;
+    } else {
+      message = 'Unexpected error';
+    }
+
+    if (message.includes('birthday_completed')) {
+      message = 'Database migration for birthday tracking is missing. Please apply the latest migrations.';
+    } else if (message.includes('row-level security') || code === '42501') {
+      message = 'Access to the profiles table is blocked by RLS policies. Please review your Supabase security configuration.';
+    } else if (message === 'Supabase service is not configured correctly') {
+      message = 'Service configuration error: missing Supabase credentials in the Edge Function environment.';
+    }
+
     const status = message === 'Unauthorized' || message === 'Forbidden' ? 403 : 400;
 
     return new Response(

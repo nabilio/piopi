@@ -42,6 +42,38 @@ export function normalizeBirthdayInput(value: string): string {
   return `${year}-${paddedMonth}-${paddedDay}`;
 }
 
+function mapBirthdayUpdateError(message: string): string {
+  if (!message) {
+    return 'Impossible d\'enregistrer l\'anniversaire';
+  }
+
+  if (message === 'Parental consent is required') {
+    return 'Le consentement parental est obligatoire.';
+  }
+
+  if (message === 'Child profile not found' || message === 'Profile not found') {
+    return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
+  }
+
+  if (message === 'Supabase service is not configured correctly') {
+    return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
+  }
+
+  if (message.includes('Database migration for birthday tracking is missing')) {
+    return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
+  }
+
+  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+    return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
+  }
+
+  if (message.includes('Invalid birthday format') || message.includes('Birthday is required')) {
+    return 'La date d\'anniversaire fournie est invalide.';
+  }
+
+  return message;
+}
+
 export async function submitBirthdayUpdate(
   accessToken: string,
   {
@@ -72,7 +104,8 @@ export async function submitBirthdayUpdate(
   const payload = await response.json();
 
   if (!response.ok) {
-    throw new Error(payload?.error || 'Impossible d\'enregistrer l\'anniversaire');
+    const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
+    throw new Error(mapBirthdayUpdateError(rawMessage));
   }
 
   return payload as { childId: string; birthday: string };
