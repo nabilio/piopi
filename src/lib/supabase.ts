@@ -33,6 +33,7 @@ export type Profile = {
   school_name?: string;
   onboarding_completed?: boolean;
   avatar_url?: string;
+  birthday?: string | null;
   banned?: boolean;
   created_at: string;
 };
