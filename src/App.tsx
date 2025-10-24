@@ -432,6 +432,7 @@ function AppContent() {
             setActiveBattleId(battleId);
             setView('battle-waiting');
           }}
+          onNetworkClick={() => handleNavigationAttempt('network')}
         />
       )}
 

@@ -11,6 +11,7 @@ import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
 import { DrawingStudioModal } from './DrawingStudioModal';
+import { BirthdayCard } from './BirthdayCard';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -21,9 +22,10 @@ type HomePageProps = {
   onCoursesClick?: () => void;
   onBattleCreated?: (battleId: string) => void;
   onStoriesClick?: () => void;
+  onNetworkClick?: () => void;
 };
 
-export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {} }: HomePageProps) {
+export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {}, onNetworkClick }: HomePageProps) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const { profile, user } = useAuth();
   const { totalPoints } = useGamification();
@@ -793,6 +795,8 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 </div>
               </div>
             </div>
+
+            <BirthdayCard currentChildId={currentChildId} onManageFriends={onNetworkClick} />
 
             <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
               const currentUserId = currentChildId;
