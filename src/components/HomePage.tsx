@@ -30,11 +30,11 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const { profile, user, refreshProfile } = useAuth();
   const { totalPoints } = useGamification();
+  const [children, setChildren] = useState<Profile[]>([]);
+  const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile, {
     childIdOverride: selectedChild?.id ?? undefined,
   });
-  const [children, setChildren] = useState<Profile[]>([]);
-  const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
   const [childPoints, setChildPoints] = useState(0);
   const [activeBattlesCount, setActiveBattlesCount] = useState(0);
