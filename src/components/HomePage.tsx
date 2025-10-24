@@ -59,7 +59,7 @@ function ExperienceButton({
     <button
       type="button"
       onClick={clickable ? () => onClick?.() : undefined}
-      className={`group relative overflow-hidden rounded-4xl text-left transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/40 ${
+      className={`group relative h-full w-full overflow-hidden rounded-4xl text-left transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/40 ${
         clickable ? 'hover:-translate-y-1 hover:shadow-xl' : 'cursor-default'
       } ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${className}`}
     >
@@ -955,7 +955,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                     </div>
                   </>
                 }
-                className="min-h-[260px] md:col-span-2"
+                className="min-h-[260px]"
               />
 
               <ExperienceButton
@@ -979,7 +979,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                     </div>
                   </>
                 }
-                className="min-h-[260px] md:col-span-2"
+                className="min-h-[260px]"
               />
 
               <ExperienceButton
