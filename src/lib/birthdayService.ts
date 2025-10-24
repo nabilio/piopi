@@ -42,6 +42,80 @@ export function normalizeBirthdayInput(value: string): string {
   return `${year}-${paddedMonth}-${paddedDay}`;
 }
 
+function mapBirthdayUpdateError(message: string): string {
+  if (!message || message === 'Unexpected error') {
+    return 'Impossible d\'enregistrer l\'anniversaire pour le moment. Merci de réessayer ultérieurement ou de contacter un administrateur.';
+  }
+
+  if (message === 'Parental consent is required') {
+    return 'Le consentement parental est obligatoire.';
+  }
+
+  if (message === 'Child profile not found' || message === 'Profile not found') {
+    return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
+  }
+
+  if (message === 'Supabase service is not configured correctly') {
+    return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
+  }
+
+  if (message === 'Unauthorized') {
+    return 'Votre session a expiré. Veuillez vous reconnecter puis réessayer.';
+  }
+
+  if (message === 'Forbidden') {
+    return 'Vous n\'avez pas les permissions nécessaires pour mettre à jour cet anniversaire.';
+  }
+
+  if (message === 'childId is required for parent accounts') {
+    return 'Merci de sélectionner l\'enfant concerné avant de valider.';
+  }
+
+  if (message === 'Cannot update another child profile') {
+    return 'Vous ne pouvez pas modifier l\'anniversaire d\'un autre enfant.';
+  }
+
+  if (message === 'Unsupported role') {
+    return 'Ce type de profil ne peut pas encore modifier une date d\'anniversaire.';
+  }
+
+  if (message.includes('Database migration for birthday tracking is missing')) {
+    return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
+  }
+
+  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+    return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
+  }
+
+  if (message.includes('Invalid birthday format') || message.includes('Birthday is required')) {
+    return 'La date d\'anniversaire fournie est invalide.';
+  }
+
+  return message;
+}
+
+function extractErrorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const candidates: unknown[] = [
+    (payload as { error?: unknown }).error,
+    (payload as { message?: unknown }).message,
+    (payload as { details?: unknown }).details,
+    (payload as { hint?: unknown }).hint,
+    (payload as { code?: unknown }).code,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() !== '') {
+      return candidate.trim();
+    }
+  }
+
+  return '';
+}
+
 export async function submitBirthdayUpdate(
   accessToken: string,
   {
@@ -69,10 +143,17 @@ export async function submitBirthdayUpdate(
     }),
   });
 
-  const payload = await response.json();
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch (parseError) {
+    console.error('Failed to parse birthday update response:', parseError);
+  }
 
   if (!response.ok) {
-    throw new Error(payload?.error || 'Impossible d\'enregistrer l\'anniversaire');
+    const rawMessage = extractErrorMessage(payload);
+    throw new Error(mapBirthdayUpdateError(rawMessage));
   }
 
   return payload as { childId: string; birthday: string };
