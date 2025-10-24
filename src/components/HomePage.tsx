@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, ArrowRight, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
+import { BookOpen, Trophy, Plus, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,75 +26,75 @@ type HomePageProps = {
   onNetworkClick?: () => void;
 };
 
-type FeaturePanelProps = {
+type ExperienceButtonProps = {
   title: string;
-  description: string;
+  subtitle: string;
+  description?: string;
   icon: ReactNode;
-  accentGradient: string;
+  gradient: string;
+  accentGlow?: string;
   onClick?: () => void | Promise<void>;
-  badge?: ReactNode;
-  cta?: string;
   stats?: ReactNode;
+  badgeCount?: number;
   disabled?: boolean;
   className?: string;
 };
 
-function NotificationBadge({ count, gradient = 'from-red-500 via-pink-500 to-orange-400' }: { count: number; gradient?: string }) {
-  return (
-    <div className="relative shrink-0">
-      <div className="absolute inset-0 -z-10 animate-pulse rounded-2xl bg-gradient-to-br from-white/0 via-white/40 to-white/0 blur-xl" />
-      <div className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${gradient} text-white text-sm font-bold shadow-lg`}>{count}</div>
-    </div>
-  );
-}
-
-function FeaturePanel({
+function ExperienceButton({
   title,
+  subtitle,
   description,
   icon,
-  accentGradient,
+  gradient,
+  accentGlow = 'from-white/20 via-white/10 to-transparent',
   onClick,
-  badge,
-  cta,
   stats,
+  badgeCount,
   disabled = false,
   className = ''
-}: FeaturePanelProps) {
+}: ExperienceButtonProps) {
   const clickable = Boolean(onClick) && !disabled;
 
   return (
-    <div
-      className={`group relative overflow-hidden rounded-3xl border border-white/60 bg-white/90 p-6 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.4)] transition-all ${
-        clickable ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_35px_70px_-30px_rgba(15,23,42,0.45)]' : 'cursor-default'
-      } ${disabled ? 'pointer-events-none opacity-60' : ''} ${className}`}
+    <button
+      type="button"
       onClick={clickable ? () => onClick?.() : undefined}
+      className={`group relative overflow-hidden rounded-4xl text-left transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/40 ${
+        clickable ? 'hover:-translate-y-1 hover:shadow-xl' : 'cursor-default'
+      } ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${className}`}
     >
-      <div className={`pointer-events-none absolute -right-32 -top-32 h-72 w-72 rounded-full bg-gradient-to-br ${accentGradient} opacity-60 blur-3xl`} />
-      <div className={`pointer-events-none absolute -left-24 bottom-0 h-56 w-56 rounded-full bg-gradient-to-tr ${accentGradient} opacity-40 blur-2xl`} />
-      <div className="pointer-events-none absolute inset-0 bg-white/40 mix-blend-soft-light" />
-
-      <div className="relative z-10 flex min-h-[220px] flex-col justify-between gap-6">
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
+      <div className={`pointer-events-none absolute -inset-12 bg-gradient-to-br ${accentGlow} opacity-70 blur-3xl`} aria-hidden />
+      <div className="relative z-10 flex h-full flex-col justify-between gap-6 p-6 text-white sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className={`grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br ${accentGradient} text-white shadow-lg`}>{icon}</div>
+            <div className="grid h-16 w-16 place-items-center rounded-3xl bg-white/20 text-white shadow-inner backdrop-blur-sm">
+              {icon}
+            </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">{subtitle}</p>
+              <h3 className="text-2xl font-black leading-tight">{title}</h3>
+              {description ? <p className="mt-3 text-sm text-white/80">{description}</p> : null}
             </div>
           </div>
-          {badge}
+          {badgeCount && badgeCount > 0 ? (
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-white text-lg font-black text-slate-900 shadow-lg">
+              <div className="absolute inset-0 -z-10 animate-ping rounded-3xl bg-white/40" aria-hidden />
+              {badgeCount}
+            </div>
+          ) : null}
         </div>
 
-        {stats ? <div className="flex flex-col gap-2 text-sm text-slate-700">{stats}</div> : null}
+        {stats ? <div className="space-y-2 text-sm text-white/90">{stats}</div> : null}
 
-        {cta ? (
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
-            <span>{cta}</span>
-            <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+        {clickable ? (
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <span>Découvrir</span>
+            <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
           </div>
         ) : null}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -725,12 +725,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
-      <div className="hidden md:block bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 py-4 px-4 shadow-lg mb-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex items-center gap-3">
-            {profile && (
-              <>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50/10 to-pink-50">
+      <div className="container mx-auto px-4 py-6">
+        {profile && (
+          <div className="mb-10 overflow-hidden rounded-3xl bg-white/80 shadow-xl backdrop-blur-sm">
+            <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+              <div className="flex flex-1 items-center gap-4">
                 <AvatarDisplay
                   userId={profile.id}
                   fallbackName={profile.full_name}
@@ -738,30 +738,46 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                   onAvatarClick={() => onProfileClick?.(profile.id)}
                   onEditClick={onAvatarClick}
                 />
-                <div
-                  onClick={() => onProfileClick?.(profile.id)}
-                  className="flex-1 min-w-0 cursor-pointer hover:opacity-80 transition"
-                >
-                  <h2 className="text-xl md:text-2xl font-bold text-white truncate">{profile.full_name}</h2>
-                  <p className="text-sm text-white/80">{profile.grade_level}</p>
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onProfileClick?.(profile.id)}
+                    className="text-left"
+                  >
+                    <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{profile.full_name}</h2>
+                    {profile.grade_level ? (
+                      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">{profile.grade_level}</p>
+                    ) : null}
+                  </button>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Continue ton aventure, découvre de nouvelles matières et collectionne les victoires !
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-400/30 to-yellow-500/30 backdrop-blur-sm px-4 py-2.5 rounded-full border border-yellow-300/40">
-                    <Trophy size={24} className="text-yellow-300" />
-                    <span className="font-bold text-white text-base">{totalPoints} pts</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-start gap-3 sm:justify-end">
+                <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-yellow-400/20 to-yellow-500/20 px-4 py-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-yellow-500 shadow-md">
+                    <Trophy className="h-6 w-6" />
                   </div>
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-red-400/30 to-orange-400/30 backdrop-blur-sm px-4 py-2.5 rounded-full border border-red-300/40">
-                    <Swords size={24} className="text-red-300" />
-                    <span className="font-bold text-white text-base">{battleWins}</span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-yellow-600">Points</p>
+                    <p className="text-xl font-black text-slate-900">{totalPoints}</p>
                   </div>
                 </div>
-              </>
-            )}
+                <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-400/20 to-orange-400/20 px-4 py-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-rose-500 shadow-md">
+                    <Swords className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-rose-600">Victoires</p>
+                    <p className="text-xl font-black text-slate-900">{battleWins}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      <div className="container mx-auto px-4 py-4">
         {profile?.role === 'parent' && selectedChild && (
           <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -854,142 +870,151 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
         {(profile?.role === 'child' || (profile?.role === 'parent' && selectedChild)) && (
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 mb-12">
-              <FeaturePanel
-                title="Mon profil"
-                description="Gère ton avatar, ton statut et tes informations personnelles."
-                icon={<User className="h-6 w-6" />}
-                accentGradient="from-slate-600 via-slate-500 to-slate-400"
+          <div className="max-w-6xl mx-auto px-2 sm:px-4">
+            <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <ExperienceButton
+                title="Mon univers"
+                subtitle="Profil & amis"
+                description="Personnalise ton avatar et retrouve toutes tes récompenses."
+                icon={<User className="h-8 w-8" />}
+                gradient="from-slate-900 via-slate-800 to-slate-700"
+                accentGlow="from-purple-400/40 via-blue-300/40 to-transparent"
                 onClick={handleProfilePanelClick}
-                badge={unreadFriendRequests > 0 ? <NotificationBadge count={unreadFriendRequests} /> : undefined}
+                badgeCount={unreadFriendRequests}
                 stats={
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-4 w-4 text-amber-500" />
-                    <span className="font-semibold">{totalPoints} points gagnés</span>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Trophy className="h-4 w-4 text-yellow-200" />
+                      <span className="font-semibold">{totalPoints} points gagnés</span>
+                    </div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/60">Toujours prêt pour de nouvelles aventures</p>
+                  </>
                 }
-                cta="Personnaliser mon profil"
+                className="min-h-[260px]"
               />
 
-              <FeaturePanel
+              <ExperienceButton
                 title="Mes cours"
-                description="Accède à toutes tes matières et continue ta progression."
-                icon={<BookOpen className="h-6 w-6" />}
-                accentGradient="from-emerald-500 via-teal-400 to-cyan-400"
+                subtitle="Apprentissage"
+                description="Reprends exactement là où tu t'étais arrêté."
+                icon={<BookOpen className="h-8 w-8" />}
+                gradient="from-emerald-500 via-teal-500 to-cyan-500"
+                accentGlow="from-white/20 via-emerald-200/40 to-transparent"
                 onClick={handleCoursesPanelClick}
                 stats={
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-emerald-500" />
+                  <div className="flex items-center gap-2 text-white/90">
+                    <BookOpen className="h-4 w-4 text-white/80" />
                     <span className="font-semibold">{subjectsCountLabel}</span>
                   </div>
                 }
-                cta="Reprendre mes cours"
+                className="min-h-[260px]"
               />
 
-              <FeaturePanel
+              <ExperienceButton
                 title="Battle Hub"
-                description="Défie tes amis dans des duels de quiz en ligne."
-                icon={<Sword className="h-6 w-6" />}
-                accentGradient="from-rose-500 via-orange-400 to-amber-400"
+                subtitle="Défis en ligne"
+                description="Affronte tes amis et grimpe dans le classement."
+                icon={<Sword className="h-8 w-8" />}
+                gradient="from-rose-500 via-orange-500 to-amber-400"
+                accentGlow="from-rose-300/50 via-amber-200/40 to-transparent"
                 onClick={handleBattlePanelClick}
-                badge={unreadBattleNotifications > 0 ? <NotificationBadge count={unreadBattleNotifications} /> : undefined}
+                badgeCount={unreadBattleNotifications}
                 stats={
                   <>
-                    <div className="flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-orange-500" />
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Trophy className="h-4 w-4 text-white/80" />
                       <span className="font-semibold">{battleWinsLabel}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Swords className="h-4 w-4 text-rose-500" />
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Swords className="h-4 w-4" />
                       <span>{battleChallengesLabel}</span>
                     </div>
                   </>
                 }
-                cta="Lancer le Battle Hub"
+                className="min-h-[260px]"
               />
 
-              <FeaturePanel
-                title="Ma bibliothèque d'histoires"
-                description="Crée, lis et partage tes histoires personnalisées."
-                icon={<Book className="h-6 w-6" />}
-                accentGradient="from-amber-500 via-orange-400 to-yellow-400"
+              <ExperienceButton
+                title="Bibliothèque d'histoires"
+                subtitle="Créativité"
+                description="Imagine des histoires uniques et partage-les avec ta famille."
+                icon={<Book className="h-8 w-8" />}
+                gradient="from-amber-500 via-orange-400 to-yellow-400"
+                accentGlow="from-white/30 via-amber-200/40 to-transparent"
                 onClick={handleStoriesPanelClick}
-                badge={unreadStoriesCount > 0 ? <NotificationBadge count={unreadStoriesCount} gradient="from-amber-500 via-orange-400 to-yellow-400" /> : undefined}
+                badgeCount={unreadStoriesCount}
                 stats={
                   <>
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-amber-500" />
-                      <span>Un nouvel univers de lecture t'attend</span>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Sparkles className="h-4 w-4" />
+                      <span>Un univers magique t'attend</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Book className="h-4 w-4 text-orange-500" />
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Book className="h-4 w-4" />
                       <span className="font-semibold">{storiesUpdateLabel}</span>
                     </div>
                   </>
                 }
-                cta="Explorer ma bibliothèque"
-                className="md:col-span-2 lg:col-span-2"
+                className="min-h-[260px] md:col-span-2"
               />
 
-              <FeaturePanel
+              <ExperienceButton
                 title="Atelier créatif"
-                description="Imagine, dessine et partage tes chefs-d'œuvre avec tes amis."
-                icon={<Palette className="h-6 w-6" />}
-                accentGradient="from-fuchsia-500 via-pink-500 to-rose-500"
+                subtitle="Dessins & partages"
+                description="Expose tes œuvres et découvre celles de tes amis."
+                icon={<Palette className="h-8 w-8" />}
+                gradient="from-fuchsia-500 via-pink-500 to-rose-500"
+                accentGlow="from-white/20 via-fuchsia-200/40 to-transparent"
                 onClick={handleDrawingPanelClick}
                 disabled={!currentChildId}
                 stats={
                   <>
-                    <div className="flex items-center gap-2">
-                      <Palette className="h-4 w-4 text-pink-500" />
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Palette className="h-4 w-4" />
                       <span className="font-semibold">{drawingsTotalLabel}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Share2 className="h-4 w-4 text-rose-500" />
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Share2 className="h-4 w-4" />
                       <span>{drawingsSharedLabel}</span>
                     </div>
                   </>
                 }
-                cta="Ouvrir l'atelier créatif"
-                className="md:col-span-2 lg:col-span-2"
+                className="min-h-[260px] md:col-span-2"
               />
 
-              <FeaturePanel
-                title="Coach Devoirs PioPi"
-                description="Ton assistant intelligent disponible à tout moment pour t'aider."
-                icon={<Bot className="h-6 w-6" />}
-                accentGradient="from-purple-500 via-violet-500 to-indigo-500"
+              <ExperienceButton
+                title="Coach devoirs"
+                subtitle="Assistant magique"
+                description="Pose tes questions et obtient de l'aide instantanément."
+                icon={<Bot className="h-8 w-8" />}
+                gradient="from-indigo-500 via-violet-500 to-purple-500"
+                accentGlow="from-white/20 via-indigo-300/40 to-transparent"
                 onClick={onCoachClick}
                 stats={
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-purple-500" />
-                      <span>Des réponses instantanées à tes questions</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-indigo-500" />
-                      <span className="font-semibold">Besoin d'aide ? Clique ici</span>
-                    </div>
-                  </>
+                  <div className="flex items-center gap-2 text-white/90">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Besoin d'aide ? Le coach est là !</span>
+                  </div>
                 }
-                cta="Parler au coach PioPi"
+                className="min-h-[260px]"
               />
 
-              <FeaturePanel
+              <ExperienceButton
                 title="Cours personnalisés"
-                description="Découvre les leçons uniques créées spécialement pour toi."
-                icon={<BookPlus className="h-6 w-6" />}
-                accentGradient="from-indigo-500 via-purple-500 to-pink-500"
+                subtitle="Sur-mesure"
+                description="Découvre les leçons créées spécialement pour toi."
+                icon={<BookPlus className="h-8 w-8" />}
+                gradient="from-blue-500 via-indigo-500 to-purple-500"
+                accentGlow="from-white/30 via-indigo-200/40 to-transparent"
                 onClick={handleCustomLessonsPanelClick}
-                badge={newCustomLessonsCount > 0 ? <NotificationBadge count={newCustomLessonsCount} gradient="from-indigo-500 via-purple-500 to-pink-500" /> : undefined}
+                badgeCount={newCustomLessonsCount}
                 stats={
-                  <div className="flex items-center gap-2">
-                    <BookPlus className="h-4 w-4 text-indigo-500" />
+                  <div className="flex items-center gap-2 text-white/90">
+                    <BookPlus className="h-4 w-4" />
                     <span className="font-semibold">{customLessonsLabel}</span>
                   </div>
                 }
-                cta="Découvrir mes leçons sur mesure"
+                className="min-h-[260px]"
               />
             </div>
           </div>
