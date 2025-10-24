@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { BookOpen, Trophy, Plus, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +24,78 @@ type HomePageProps = {
   onBattleCreated?: (battleId: string) => void;
   onStoriesClick?: () => void;
 };
+
+type ExperienceButtonProps = {
+  title: string;
+  subtitle: string;
+  description?: string;
+  icon: ReactNode;
+  gradient: string;
+  accentGlow?: string;
+  onClick?: () => void | Promise<void>;
+  stats?: ReactNode;
+  badgeCount?: number;
+  disabled?: boolean;
+  className?: string;
+};
+
+function ExperienceButton({
+  title,
+  subtitle,
+  description,
+  icon,
+  gradient,
+  accentGlow = 'from-white/20 via-white/10 to-transparent',
+  onClick,
+  stats,
+  badgeCount,
+  disabled = false,
+  className = ''
+}: ExperienceButtonProps) {
+  const clickable = Boolean(onClick) && !disabled;
+
+  return (
+    <button
+      type="button"
+      onClick={clickable ? () => onClick?.() : undefined}
+      className={`group relative overflow-hidden rounded-4xl text-left transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/40 ${
+        clickable ? 'hover:-translate-y-1 hover:shadow-xl' : 'cursor-default'
+      } ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${className}`}
+    >
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
+      <div className={`pointer-events-none absolute -inset-12 bg-gradient-to-br ${accentGlow} opacity-70 blur-3xl`} aria-hidden />
+      <div className="relative z-10 flex h-full flex-col justify-between gap-6 p-6 text-white sm:p-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="grid h-16 w-16 place-items-center rounded-3xl bg-white/20 text-white shadow-inner backdrop-blur-sm">
+              {icon}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">{subtitle}</p>
+              <h3 className="text-2xl font-black leading-tight">{title}</h3>
+              {description ? <p className="mt-3 text-sm text-white/80">{description}</p> : null}
+            </div>
+          </div>
+          {badgeCount && badgeCount > 0 ? (
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl bg-white text-lg font-black text-slate-900 shadow-lg">
+              <div className="absolute inset-0 -z-10 animate-ping rounded-3xl bg-white/40" aria-hidden />
+              {badgeCount}
+            </div>
+          ) : null}
+        </div>
+
+        {stats ? <div className="space-y-2 text-sm text-white/90">{stats}</div> : null}
+
+        {clickable ? (
+          <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+            <span>Découvrir</span>
+            <span className="transition-transform duration-300 group-hover:translate-x-1">→</span>
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+}
 
 export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {} }: HomePageProps) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -417,6 +489,102 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     setSubjects(filteredSubjects);
   }
 
+  const handleProfilePanelClick = () => {
+    if (profile?.id) {
+      onProfileClick?.(profile.id);
+    }
+  };
+
+  const handleCoursesPanelClick = () => {
+    onCoursesClick();
+  };
+
+  const handleBattlePanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('⚔️ Updating last_battle_hub_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_battle_hub_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_battle_hub_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_battle_hub_visit');
+      }
+    }
+
+    setUnreadBattleNotifications(0);
+    onBattleClick?.();
+  };
+
+  const handleStoriesPanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_stories_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_stories_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_stories_visit');
+      }
+    }
+
+    setUnreadStoriesCount(0);
+    setShowStories(true);
+    onStoriesClick?.();
+  };
+
+  const handleCustomLessonsPanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_custom_lessons_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_custom_lessons_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_custom_lessons_visit');
+      }
+    }
+
+    setNewCustomLessonsCount(0);
+    setShowCustomLessons(true);
+  };
+
+  const handleDrawingPanelClick = () => {
+    if (!currentChildId) return;
+    setShowDrawingStudio(true);
+  };
+
+  const subjectsCountLabel = `${subjects.length} matière${subjects.length > 1 ? 's' : ''} disponibles`;
+  const battleWinsLabel = `${battleWins} victoire${battleWins > 1 ? 's' : ''}`;
+  const battleChallengesLabel =
+    unreadBattleNotifications > 0
+      ? `${unreadBattleNotifications} nouveau${unreadBattleNotifications > 1 ? 'x' : ''} défi${unreadBattleNotifications > 1 ? 's' : ''}`
+      : 'Pas de nouveaux défis';
+  const storiesUpdateLabel =
+    unreadStoriesCount > 0
+      ? `${unreadStoriesCount} nouvelle${unreadStoriesCount > 1 ? 's' : ''} histoire${unreadStoriesCount > 1 ? 's' : ''}`
+      : 'Aucune nouvelle histoire';
+  const customLessonsLabel =
+    newCustomLessonsCount > 0
+      ? `${newCustomLessonsCount} leçon${newCustomLessonsCount > 1 ? 's' : ''} sur mesure à explorer`
+      : 'À jour pour le moment';
+  const drawingsTotalLabel = `${drawingStats.total} dessin${drawingStats.total > 1 ? 's' : ''}`;
+  const drawingsSharedLabel = `${drawingStats.shared} partagé${drawingStats.shared > 1 ? 's' : ''}`;
+
   if (profile?.role === 'parent' && !selectedChild) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
@@ -556,12 +724,12 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
-      <div className="hidden md:block bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 py-4 px-4 shadow-lg mb-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex items-center gap-3">
-            {profile && (
-              <>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50/10 to-pink-50">
+      <div className="container mx-auto px-4 py-6">
+        {profile && (
+          <div className="mb-10 overflow-hidden rounded-3xl bg-white/80 shadow-xl backdrop-blur-sm">
+            <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+              <div className="flex flex-1 items-center gap-4">
                 <AvatarDisplay
                   userId={profile.id}
                   fallbackName={profile.full_name}
@@ -569,30 +737,46 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                   onAvatarClick={() => onProfileClick?.(profile.id)}
                   onEditClick={onAvatarClick}
                 />
-                <div
-                  onClick={() => onProfileClick?.(profile.id)}
-                  className="flex-1 min-w-0 cursor-pointer hover:opacity-80 transition"
-                >
-                  <h2 className="text-xl md:text-2xl font-bold text-white truncate">{profile.full_name}</h2>
-                  <p className="text-sm text-white/80">{profile.grade_level}</p>
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onProfileClick?.(profile.id)}
+                    className="text-left"
+                  >
+                    <h2 className="text-2xl font-bold text-slate-900 line-clamp-1">{profile.full_name}</h2>
+                    {profile.grade_level ? (
+                      <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">{profile.grade_level}</p>
+                    ) : null}
+                  </button>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Continue ton aventure, découvre de nouvelles matières et collectionne les victoires !
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-400/30 to-yellow-500/30 backdrop-blur-sm px-4 py-2.5 rounded-full border border-yellow-300/40">
-                    <Trophy size={24} className="text-yellow-300" />
-                    <span className="font-bold text-white text-base">{totalPoints} pts</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-start gap-3 sm:justify-end">
+                <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-yellow-400/20 to-yellow-500/20 px-4 py-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-yellow-500 shadow-md">
+                    <Trophy className="h-6 w-6" />
                   </div>
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-red-400/30 to-orange-400/30 backdrop-blur-sm px-4 py-2.5 rounded-full border border-red-300/40">
-                    <Swords size={24} className="text-red-300" />
-                    <span className="font-bold text-white text-base">{battleWins}</span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-yellow-600">Points</p>
+                    <p className="text-xl font-black text-slate-900">{totalPoints}</p>
                   </div>
                 </div>
-              </>
-            )}
+                <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rose-400/20 to-orange-400/20 px-4 py-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-rose-500 shadow-md">
+                    <Swords className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-rose-600">Victoires</p>
+                    <p className="text-xl font-black text-slate-900">{battleWins}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      <div className="container mx-auto px-4 py-4">
         {profile?.role === 'parent' && selectedChild && (
           <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -685,300 +869,153 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
         {(profile?.role === 'child' || (profile?.role === 'parent' && selectedChild)) && (
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-12">
-            <div className="bg-gradient-to-br from-gray-500 to-gray-700 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={() => onProfileClick?.(profile?.id || '')}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              {unreadFriendRequests > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadFriendRequests}
+          <div className="max-w-6xl mx-auto px-2 sm:px-4">
+            <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <ExperienceButton
+                title="Mon univers"
+                subtitle="Profil & amis"
+                description="Personnalise ton avatar et retrouve toutes tes récompenses."
+                icon={<User className="h-8 w-8" />}
+                gradient="from-slate-900 via-slate-800 to-slate-700"
+                accentGlow="from-purple-400/40 via-blue-300/40 to-transparent"
+                onClick={handleProfilePanelClick}
+                badgeCount={unreadFriendRequests}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Trophy className="h-4 w-4 text-yellow-200" />
+                      <span className="font-semibold">{totalPoints} points gagnés</span>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 rounded-2xl blur-xl" />
-                  <div className="relative bg-white/30 backdrop-blur-sm p-2.5 md:p-3 rounded-2xl">
-                    <User size={36} className="text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mon Profil</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Gère ton avatar et tes informations
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <Trophy size={18} />
-                  <span className="font-semibold">{totalPoints} points</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoursesClick}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative bg-white/30 backdrop-blur-sm p-2.5 md:p-3 rounded-2xl">
-                    <BookOpen size={36} className="text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mes Cours</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Accède à toutes tes matières et leçons
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookOpen size={18} />
-                  <span className="font-semibold">{subjects.length} matières disponibles</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = currentChildId;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('⚔️ Updating last_battle_hub_visit for user:', currentUserId, 'to:', timestamp);
-                const { error } = await supabase
-                  .from('profiles')
-                  .update({ last_battle_hub_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_battle_hub_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_battle_hub_visit');
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/60">Toujours prêt pour de nouvelles aventures</p>
+                  </>
                 }
-              }
-              setUnreadBattleNotifications(0);
-              onBattleClick?.();
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                className="min-h-[260px]"
+              />
 
-              {unreadBattleNotifications > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadBattleNotifications}
-                    </div>
+              <ExperienceButton
+                title="Mes cours"
+                subtitle="Apprentissage"
+                description="Reprends exactement là où tu t'étais arrêté."
+                icon={<BookOpen className="h-8 w-8" />}
+                gradient="from-emerald-500 via-teal-500 to-cyan-500"
+                accentGlow="from-white/20 via-emerald-200/40 to-transparent"
+                onClick={handleCoursesPanelClick}
+                stats={
+                  <div className="flex items-center gap-2 text-white/90">
+                    <BookOpen className="h-4 w-4 text-white/80" />
+                    <span className="font-semibold">{subjectsCountLabel}</span>
                   </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Sword size={28} className="md:hidden text-white" />
-                    <Sword size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">
-                  Mode Battle<br />
-                  <span className="text-base md:text-lg">En ligne</span>
-                </h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Défie tes amis dans des duels de quiz
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <Trophy size={18} />
-                  <span className="font-semibold">Deviens le champion!</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = currentChildId;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
-                const { error } = await supabase
-                  .from('profiles')
-                  .update({ last_stories_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_stories_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_stories_visit');
                 }
-              }
-              setUnreadStoriesCount(0);
-              setShowStories(true);
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                className="min-h-[260px]"
+              />
 
-              {unreadStoriesCount > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadStoriesCount}
+              <ExperienceButton
+                title="Battle Hub"
+                subtitle="Défis en ligne"
+                description="Affronte tes amis et grimpe dans le classement."
+                icon={<Sword className="h-8 w-8" />}
+                gradient="from-rose-500 via-orange-500 to-amber-400"
+                accentGlow="from-rose-300/50 via-amber-200/40 to-transparent"
+                onClick={handleBattlePanelClick}
+                badgeCount={unreadBattleNotifications}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Trophy className="h-4 w-4 text-white/80" />
+                      <span className="font-semibold">{battleWinsLabel}</span>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Book size={28} className="md:hidden text-white" />
-                    <Book size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mes Histoires</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Crée et lis tes aventures personnalisées
-                </p>
-
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <Sparkles size={18} />
-                <span className="font-semibold">3 histoires par jour</span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`bg-gradient-to-br from-pink-500 to-fuchsia-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden transition-all ${
-              currentChildId ? 'cursor-pointer hover:shadow-3xl hover:-translate-y-1' : 'opacity-70 cursor-not-allowed'
-            }`}
-            onClick={() => {
-              if (!currentChildId) return;
-              setShowDrawingStudio(true);
-            }}
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-            <div className="relative z-10">
-              <div className="relative inline-block mb-4">
-                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                  <Palette size={32} className="text-white" />
-                </div>
-              </div>
-
-              <h2 className="text-xl md:text-2xl font-black mb-2">Atelier de dessin</h2>
-              <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                Crée ton classeur de chefs-d'œuvre et partage-les !
-              </p>
-
-              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 text-white/80 text-sm">
-                <div className="flex items-center gap-2">
-                  <Palette size={18} />
-                  <span className="font-semibold">
-                    {drawingStats.total} dessin{drawingStats.total > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                  <Share2 size={18} />
-                  <span className="font-semibold">
-                    {drawingStats.shared} partagé{drawingStats.shared > 1 ? 's' : ''}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoachClick}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Bot size={28} className="md:hidden text-white" />
-                    <Bot size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Coach Devoirs PioPi</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Ton assistant intelligent disponible 24/7
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookOpen size={18} />
-                  <span className="font-semibold">Besoin d'aide?</span>
-                </div>
-              </div>
-            </div>
-
-          <div className="bg-gradient-to-br from-violet-500 to-purple-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-            const currentUserId = currentChildId;
-            if (currentUserId) {
-              const timestamp = new Date().toISOString();
-              console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
-              const { error } = await supabase
-                .from('profiles')
-                  .update({ last_custom_lessons_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_custom_lessons_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_custom_lessons_visit');
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Swords className="h-4 w-4" />
+                      <span>{battleChallengesLabel}</span>
+                    </div>
+                  </>
                 }
-              }
-              setNewCustomLessonsCount(0);
-              setShowCustomLessons(true);
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                className="min-h-[260px]"
+              />
 
-              {newCustomLessonsCount > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {newCustomLessonsCount}
+              <ExperienceButton
+                title="Bibliothèque d'histoires"
+                subtitle="Créativité"
+                description="Imagine des histoires uniques et partage-les avec ta famille."
+                icon={<Book className="h-8 w-8" />}
+                gradient="from-amber-500 via-orange-400 to-yellow-400"
+                accentGlow="from-white/30 via-amber-200/40 to-transparent"
+                onClick={handleStoriesPanelClick}
+                badgeCount={unreadStoriesCount}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Sparkles className="h-4 w-4" />
+                      <span>Un univers magique t'attend</span>
                     </div>
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Book className="h-4 w-4" />
+                      <span className="font-semibold">{storiesUpdateLabel}</span>
+                    </div>
+                  </>
+                }
+                className="min-h-[260px] md:col-span-2"
+              />
+
+              <ExperienceButton
+                title="Atelier créatif"
+                subtitle="Dessins & partages"
+                description="Expose tes œuvres et découvre celles de tes amis."
+                icon={<Palette className="h-8 w-8" />}
+                gradient="from-fuchsia-500 via-pink-500 to-rose-500"
+                accentGlow="from-white/20 via-fuchsia-200/40 to-transparent"
+                onClick={handleDrawingPanelClick}
+                disabled={!currentChildId}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <Palette className="h-4 w-4" />
+                      <span className="font-semibold">{drawingsTotalLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/80">
+                      <Share2 className="h-4 w-4" />
+                      <span>{drawingsSharedLabel}</span>
+                    </div>
+                  </>
+                }
+                className="min-h-[260px] md:col-span-2"
+              />
+
+              <ExperienceButton
+                title="Coach devoirs"
+                subtitle="Assistant magique"
+                description="Pose tes questions et obtient de l'aide instantanément."
+                icon={<Bot className="h-8 w-8" />}
+                gradient="from-indigo-500 via-violet-500 to-purple-500"
+                accentGlow="from-white/20 via-indigo-300/40 to-transparent"
+                onClick={onCoachClick}
+                stats={
+                  <div className="flex items-center gap-2 text-white/90">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Besoin d'aide ? Le coach est là !</span>
                   </div>
-                </div>
-              )}
+                }
+                className="min-h-[260px]"
+              />
 
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <BookPlus size={28} className="md:hidden text-white" />
-                    <BookPlus size={32} className="hidden md:block text-white" />
+              <ExperienceButton
+                title="Cours personnalisés"
+                subtitle="Sur-mesure"
+                description="Découvre les leçons créées spécialement pour toi."
+                icon={<BookPlus className="h-8 w-8" />}
+                gradient="from-blue-500 via-indigo-500 to-purple-500"
+                accentGlow="from-white/30 via-indigo-200/40 to-transparent"
+                onClick={handleCustomLessonsPanelClick}
+                badgeCount={newCustomLessonsCount}
+                stats={
+                  <div className="flex items-center gap-2 text-white/90">
+                    <BookPlus className="h-4 w-4" />
+                    <span className="font-semibold">{customLessonsLabel}</span>
                   </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Cours Personnalisés</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Apprends avec des leçons créées par tes parents
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookPlus size={18} />
-                  <span className="font-semibold">Leçons sur mesure</span>
-                </div>
-              </div>
+                }
+                className="min-h-[260px]"
+              />
             </div>
-            </div>
-
           </div>
         )}
 
