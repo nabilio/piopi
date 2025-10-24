@@ -23,6 +23,7 @@ type HomePageProps = {
   onCoursesClick?: () => void;
   onBattleCreated?: (battleId: string) => void;
   onStoriesClick?: () => void;
+  onNetworkClick?: () => void;
 };
 
 type ExperienceButtonProps = {
