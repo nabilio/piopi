@@ -152,13 +152,28 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       .eq('id', targetChildId);
 
     if (updateError) {
-      const message = typeof updateError.message === 'string'
+      const message = typeof updateError.message === 'string' && updateError.message.trim() !== ''
         ? updateError.message
         : 'Failed to update birthday';
-      const code = 'code' in updateError ? String(updateError.code) : undefined;
-      const error = new Error(message);
+      const code = 'code' in updateError && typeof updateError.code === 'string'
+        ? updateError.code
+        : undefined;
+      const details = 'details' in updateError && typeof updateError.details === 'string'
+        ? updateError.details
+        : undefined;
+      const hint = 'hint' in updateError && typeof updateError.hint === 'string'
+        ? updateError.hint
+        : undefined;
+
+      const error = new Error(message) as Error & { code?: string; details?: string; hint?: string };
       if (code) {
-        (error as Error & { code?: string }).code = code;
+        error.code = code;
+      }
+      if (details) {
+        error.details = details;
+      }
+      if (hint) {
+        error.hint = hint;
       }
       throw error;
     }
@@ -182,10 +197,14 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
 
     let message: string;
     let code: string | undefined;
+    let details: string | undefined;
+    let hint: string | undefined;
 
     if (error instanceof Error) {
       message = error.message || 'Unexpected error';
       code = (error as Error & { code?: string }).code;
+      details = (error as Error & { details?: string }).details;
+      hint = (error as Error & { hint?: string }).hint;
     } else if (error && typeof error === 'object') {
       const candidate = error as { message?: unknown; code?: unknown };
       message = typeof candidate.message === 'string' && candidate.message.trim() !== ''
@@ -198,6 +217,12 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       message = 'Unexpected error';
     }
 
+    const extraDetails = [details, hint].filter((value): value is string => typeof value === 'string' && value.trim() !== '');
+
+    if ((message === 'Unexpected error' || message === 'Failed to update birthday') && extraDetails.length > 0) {
+      message = extraDetails[0];
+    }
+
     if (message.includes('birthday_completed')) {
       message = 'Database migration for birthday tracking is missing. Please apply the latest migrations.';
     } else if (message.includes('row-level security') || code === '42501') {
@@ -208,8 +233,18 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
 
     const status = message === 'Unauthorized' || message === 'Forbidden' ? 403 : 400;
 
+    const responsePayload: Record<string, string> = { error: message };
+    if (code) {
+      responsePayload.code = code;
+    }
+    if (extraDetails[0] && extraDetails[0] !== message) {
+      responsePayload.details = extraDetails[0];
+    } else if (extraDetails[1] && extraDetails[1] !== message) {
+      responsePayload.details = extraDetails[1];
+    }
+
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify(responsePayload),
       {
         status,
         headers: {
