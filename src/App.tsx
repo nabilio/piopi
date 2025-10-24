@@ -9,6 +9,7 @@ import { HomePage } from './components/HomePage';
 import { SubjectView } from './components/SubjectView';
 import { CoachDevoirs } from './components/CoachDevoirs';
 import { ParentDashboard } from './components/ParentDashboard';
+import { ParentBirthdays } from './components/ParentBirthdays';
 import { AuthModal } from './components/AuthModal';
 import { AvatarCustomizer } from './components/AvatarCustomizer';
 import { AchievementNotification } from './components/AchievementNotification';
@@ -54,7 +55,7 @@ import { useGamification } from './hooks/useGamification';
 import { Subject, Activity } from './lib/supabase';
 import { supabase } from './lib/supabase';
 
-type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
+type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
 function UpgradePlanView({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const { user } = useAuth();
@@ -564,6 +565,13 @@ function AppContent() {
       )}
 
       {view === 'coach' && <CoachDevoirs onBack={handleBack} />}
+
+      {view === 'parent-birthdays' && profile?.role === 'parent' && user && (
+        <ParentBirthdays
+          parentId={user.id}
+          onBack={() => handleNavigationAttempt('parent-home')}
+        />
+      )}
 
       {view === 'parent-dashboard' && (
         <ParentDashboard

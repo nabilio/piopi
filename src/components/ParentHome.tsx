@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Sparkles, Trophy, BookOpen, Brain, Target, Users, Star, Gamepad2, Share2, Baby, Book } from 'lucide-react';
+import { Plus, Sparkles, Trophy, BookOpen, Brain, Target, Users, Star, Gamepad2, Share2, Baby, Book, CalendarHeart } from 'lucide-react';
 import { supabase, Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
@@ -428,6 +428,29 @@ export function ParentHome({ onChildSelect, onNavigate }: ParentHomeProps) {
                   </button>
                 </div>
               ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              <div className="bg-gradient-to-r from-purple-100 via-pink-100 to-orange-100 rounded-2xl shadow-lg p-6 flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-purple-600 shadow-md">
+                    <CalendarHeart size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-800">Anniversaires & Invitations</h3>
+                    <p className="text-sm text-gray-600">Suivez les dates clés et confirmez rapidement les invitations.</p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-700">Chaque enfant peut renseigner sa date d'anniversaire depuis son espace pour débloquer des surprises personnalisées.</p>
+                <button
+                  type="button"
+                  onClick={() => onNavigate && onNavigate('parent-birthdays')}
+                  className="inline-flex items-center gap-2 self-start rounded-2xl bg-white px-5 py-2.5 text-sm font-semibold text-purple-600 shadow transition hover:bg-purple-50"
+                >
+                  <CalendarHeart size={18} />
+                  Gérer les anniversaires
+                </button>
+              </div>
             </div>
 
           </div>

@@ -1,5 +1,21 @@
 # 🎯 Solution complète pour l'erreur d'upgrade d'abonnement
 
+## 🎂 Nouveautés : suivi des anniversaires
+
+- Ajout d'un formulaire sécurisé sur le tableau de bord enfant pour saisir la date d'anniversaire avec consentement parental.
+- Nouvelle carte de notification qui invite l'enfant à compléter ses informations tant que l'anniversaire n'est pas validé.
+- Section parentale dédiée pour consulter les invitations reçues, valider les présences et visualiser les prochaines dates clés.
+- API Supabase `update-child-birthday` pour tracer les consentements et marquer le profil comme complété.
+- Rapports automatiques des invitations d'anniversaire et des dates à venir dans la vue parent.
+
+Pour accéder à ces nouveautés :
+1. Connectez un compte enfant, renseignez la date d'anniversaire et validez le consentement.
+2. Depuis l'accueil parent, utilisez le bouton **Gestion des anniversaires** pour consulter l'ensemble des invitations et confirmations.
+3. Les parents peuvent confirmer ou refuser une invitation directement depuis cette nouvelle interface.
+
+---
+
+
 ## 📝 Résumé du problème
 
 Vous rencontriez plusieurs problèmes :
