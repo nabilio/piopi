@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Rocket, Star, BookOpen, Trophy, UserPlus, Plus, ArrowLeft, ArrowRight, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,6 +24,78 @@ type HomePageProps = {
   onBattleCreated?: (battleId: string) => void;
   onStoriesClick?: () => void;
 };
+
+type FeaturePanelProps = {
+  title: string;
+  description: string;
+  icon: ReactNode;
+  accentGradient: string;
+  onClick?: () => void | Promise<void>;
+  badge?: ReactNode;
+  cta?: string;
+  stats?: ReactNode;
+  disabled?: boolean;
+  className?: string;
+};
+
+function NotificationBadge({ count, gradient = 'from-red-500 via-pink-500 to-orange-400' }: { count: number; gradient?: string }) {
+  return (
+    <div className="relative shrink-0">
+      <div className="absolute inset-0 -z-10 animate-pulse rounded-2xl bg-gradient-to-br from-white/0 via-white/40 to-white/0 blur-xl" />
+      <div className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${gradient} text-white text-sm font-bold shadow-lg`}>{count}</div>
+    </div>
+  );
+}
+
+function FeaturePanel({
+  title,
+  description,
+  icon,
+  accentGradient,
+  onClick,
+  badge,
+  cta,
+  stats,
+  disabled = false,
+  className = ''
+}: FeaturePanelProps) {
+  const clickable = Boolean(onClick) && !disabled;
+
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-3xl border border-white/60 bg-white/90 p-6 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.4)] transition-all ${
+        clickable ? 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_35px_70px_-30px_rgba(15,23,42,0.45)]' : 'cursor-default'
+      } ${disabled ? 'pointer-events-none opacity-60' : ''} ${className}`}
+      onClick={clickable ? () => onClick?.() : undefined}
+    >
+      <div className={`pointer-events-none absolute -right-32 -top-32 h-72 w-72 rounded-full bg-gradient-to-br ${accentGradient} opacity-60 blur-3xl`} />
+      <div className={`pointer-events-none absolute -left-24 bottom-0 h-56 w-56 rounded-full bg-gradient-to-tr ${accentGradient} opacity-40 blur-2xl`} />
+      <div className="pointer-events-none absolute inset-0 bg-white/40 mix-blend-soft-light" />
+
+      <div className="relative z-10 flex min-h-[220px] flex-col justify-between gap-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className={`grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br ${accentGradient} text-white shadow-lg`}>{icon}</div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
+            </div>
+          </div>
+          {badge}
+        </div>
+
+        {stats ? <div className="flex flex-col gap-2 text-sm text-slate-700">{stats}</div> : null}
+
+        {cta ? (
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+            <span>{cta}</span>
+            <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {} }: HomePageProps) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -417,6 +489,102 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
     setSubjects(filteredSubjects);
   }
 
+  const handleProfilePanelClick = () => {
+    if (profile?.id) {
+      onProfileClick?.(profile.id);
+    }
+  };
+
+  const handleCoursesPanelClick = () => {
+    onCoursesClick();
+  };
+
+  const handleBattlePanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('⚔️ Updating last_battle_hub_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_battle_hub_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_battle_hub_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_battle_hub_visit');
+      }
+    }
+
+    setUnreadBattleNotifications(0);
+    onBattleClick?.();
+  };
+
+  const handleStoriesPanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_stories_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_stories_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_stories_visit');
+      }
+    }
+
+    setUnreadStoriesCount(0);
+    setShowStories(true);
+    onStoriesClick?.();
+  };
+
+  const handleCustomLessonsPanelClick = async () => {
+    const currentUserId = currentChildId;
+    if (currentUserId) {
+      const timestamp = new Date().toISOString();
+      console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ last_custom_lessons_visit: timestamp })
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('❌ Error updating last_custom_lessons_visit:', error);
+      } else {
+        console.log('✅ Successfully updated last_custom_lessons_visit');
+      }
+    }
+
+    setNewCustomLessonsCount(0);
+    setShowCustomLessons(true);
+  };
+
+  const handleDrawingPanelClick = () => {
+    if (!currentChildId) return;
+    setShowDrawingStudio(true);
+  };
+
+  const subjectsCountLabel = `${subjects.length} matière${subjects.length > 1 ? 's' : ''} disponibles`;
+  const battleWinsLabel = `${battleWins} victoire${battleWins > 1 ? 's' : ''}`;
+  const battleChallengesLabel =
+    unreadBattleNotifications > 0
+      ? `${unreadBattleNotifications} nouveau${unreadBattleNotifications > 1 ? 'x' : ''} défi${unreadBattleNotifications > 1 ? 's' : ''}`
+      : 'Pas de nouveaux défis';
+  const storiesUpdateLabel =
+    unreadStoriesCount > 0
+      ? `${unreadStoriesCount} nouvelle${unreadStoriesCount > 1 ? 's' : ''} histoire${unreadStoriesCount > 1 ? 's' : ''}`
+      : 'Aucune nouvelle histoire';
+  const customLessonsLabel =
+    newCustomLessonsCount > 0
+      ? `${newCustomLessonsCount} leçon${newCustomLessonsCount > 1 ? 's' : ''} sur mesure à explorer`
+      : 'À jour pour le moment';
+  const drawingsTotalLabel = `${drawingStats.total} dessin${drawingStats.total > 1 ? 's' : ''}`;
+  const drawingsSharedLabel = `${drawingStats.shared} partagé${drawingStats.shared > 1 ? 's' : ''}`;
+
   if (profile?.role === 'parent' && !selectedChild) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50">
@@ -686,299 +854,143 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
 
         {(profile?.role === 'child' || (profile?.role === 'parent' && selectedChild)) && (
           <div className="max-w-6xl mx-auto px-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-12">
-            <div className="bg-gradient-to-br from-gray-500 to-gray-700 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={() => onProfileClick?.(profile?.id || '')}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              {unreadFriendRequests > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadFriendRequests}
-                    </div>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 mb-12">
+              <FeaturePanel
+                title="Mon profil"
+                description="Gère ton avatar, ton statut et tes informations personnelles."
+                icon={<User className="h-6 w-6" />}
+                accentGradient="from-slate-600 via-slate-500 to-slate-400"
+                onClick={handleProfilePanelClick}
+                badge={unreadFriendRequests > 0 ? <NotificationBadge count={unreadFriendRequests} /> : undefined}
+                stats={
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    <span className="font-semibold">{totalPoints} points gagnés</span>
                   </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 rounded-2xl blur-xl" />
-                  <div className="relative bg-white/30 backdrop-blur-sm p-2.5 md:p-3 rounded-2xl">
-                    <User size={36} className="text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mon Profil</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Gère ton avatar et tes informations
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <Trophy size={18} />
-                  <span className="font-semibold">{totalPoints} points</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoursesClick}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative bg-white/30 backdrop-blur-sm p-2.5 md:p-3 rounded-2xl">
-                    <BookOpen size={36} className="text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mes Cours</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Accède à toutes tes matières et leçons
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookOpen size={18} />
-                  <span className="font-semibold">{subjects.length} matières disponibles</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-orange-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = currentChildId;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('⚔️ Updating last_battle_hub_visit for user:', currentUserId, 'to:', timestamp);
-                const { error } = await supabase
-                  .from('profiles')
-                  .update({ last_battle_hub_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_battle_hub_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_battle_hub_visit');
                 }
-              }
-              setUnreadBattleNotifications(0);
-              onBattleClick?.();
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                cta="Personnaliser mon profil"
+              />
 
-              {unreadBattleNotifications > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadBattleNotifications}
-                    </div>
+              <FeaturePanel
+                title="Mes cours"
+                description="Accède à toutes tes matières et continue ta progression."
+                icon={<BookOpen className="h-6 w-6" />}
+                accentGradient="from-emerald-500 via-teal-400 to-cyan-400"
+                onClick={handleCoursesPanelClick}
+                stats={
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-emerald-500" />
+                    <span className="font-semibold">{subjectsCountLabel}</span>
                   </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Sword size={28} className="md:hidden text-white" />
-                    <Sword size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">
-                  Mode Battle<br />
-                  <span className="text-base md:text-lg">En ligne</span>
-                </h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Défie tes amis dans des duels de quiz
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <Trophy size={18} />
-                  <span className="font-semibold">Deviens le champion!</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-              const currentUserId = currentChildId;
-              if (currentUserId) {
-                const timestamp = new Date().toISOString();
-                console.log('📖 Updating last_stories_visit for user:', currentUserId, 'to:', timestamp);
-                const { error } = await supabase
-                  .from('profiles')
-                  .update({ last_stories_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_stories_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_stories_visit');
                 }
-              }
-              setUnreadStoriesCount(0);
-              setShowStories(true);
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                cta="Reprendre mes cours"
+              />
 
-              {unreadStoriesCount > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {unreadStoriesCount}
+              <FeaturePanel
+                title="Battle Hub"
+                description="Défie tes amis dans des duels de quiz en ligne."
+                icon={<Sword className="h-6 w-6" />}
+                accentGradient="from-rose-500 via-orange-400 to-amber-400"
+                onClick={handleBattlePanelClick}
+                badge={unreadBattleNotifications > 0 ? <NotificationBadge count={unreadBattleNotifications} /> : undefined}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-4 w-4 text-orange-500" />
+                      <span className="font-semibold">{battleWinsLabel}</span>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Book size={28} className="md:hidden text-white" />
-                    <Book size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Mes Histoires</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Crée et lis tes aventures personnalisées
-                </p>
-
-              <div className="flex items-center gap-2 text-white/80 text-sm">
-                <Sparkles size={18} />
-                <span className="font-semibold">3 histoires par jour</span>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className={`bg-gradient-to-br from-pink-500 to-fuchsia-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden transition-all ${
-              currentChildId ? 'cursor-pointer hover:shadow-3xl hover:-translate-y-1' : 'opacity-70 cursor-not-allowed'
-            }`}
-            onClick={() => {
-              if (!currentChildId) return;
-              setShowDrawingStudio(true);
-            }}
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-            <div className="relative z-10">
-              <div className="relative inline-block mb-4">
-                <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                  <Palette size={32} className="text-white" />
-                </div>
-              </div>
-
-              <h2 className="text-xl md:text-2xl font-black mb-2">Atelier de dessin</h2>
-              <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                Crée ton classeur de chefs-d'œuvre et partage-les !
-              </p>
-
-              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 text-white/80 text-sm">
-                <div className="flex items-center gap-2">
-                  <Palette size={18} />
-                  <span className="font-semibold">
-                    {drawingStats.total} dessin{drawingStats.total > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                  <Share2 size={18} />
-                  <span className="font-semibold">
-                    {drawingStats.shared} partagé{drawingStats.shared > 1 ? 's' : ''}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={onCoachClick}>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <Bot size={28} className="md:hidden text-white" />
-                    <Bot size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Coach Devoirs PioPi</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Ton assistant intelligent disponible 24/7
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookOpen size={18} />
-                  <span className="font-semibold">Besoin d'aide?</span>
-                </div>
-              </div>
-            </div>
-
-          <div className="bg-gradient-to-br from-violet-500 to-purple-500 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden cursor-pointer hover:shadow-3xl transition-all hover:-translate-y-1" onClick={async () => {
-            const currentUserId = currentChildId;
-            if (currentUserId) {
-              const timestamp = new Date().toISOString();
-              console.log('📚 Updating last_custom_lessons_visit for user:', currentUserId, 'to:', timestamp);
-              const { error } = await supabase
-                .from('profiles')
-                  .update({ last_custom_lessons_visit: timestamp })
-                  .eq('id', currentUserId);
-
-                if (error) {
-                  console.error('❌ Error updating last_custom_lessons_visit:', error);
-                } else {
-                  console.log('✅ Successfully updated last_custom_lessons_visit');
+                    <div className="flex items-center gap-2">
+                      <Swords className="h-4 w-4 text-rose-500" />
+                      <span>{battleChallengesLabel}</span>
+                    </div>
+                  </>
                 }
-              }
-              setNewCustomLessonsCount(0);
-              setShowCustomLessons(true);
-            }}>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-12 -mb-12" />
+                cta="Lancer le Battle Hub"
+              />
 
-              {newCustomLessonsCount > 0 && (
-                <div className="absolute top-4 right-4 z-20">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-red-500 blur-lg animate-pulse" />
-                    <div className="relative bg-red-500 text-white font-black text-base md:text-lg rounded-full w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shadow-2xl border-3 md:border-4 border-white">
-                      {newCustomLessonsCount}
+              <FeaturePanel
+                title="Ma bibliothèque d'histoires"
+                description="Crée, lis et partage tes histoires personnalisées."
+                icon={<Book className="h-6 w-6" />}
+                accentGradient="from-amber-500 via-orange-400 to-yellow-400"
+                onClick={handleStoriesPanelClick}
+                badge={unreadStoriesCount > 0 ? <NotificationBadge count={unreadStoriesCount} gradient="from-amber-500 via-orange-400 to-yellow-400" /> : undefined}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <span>Un nouvel univers de lecture t'attend</span>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Book className="h-4 w-4 text-orange-500" />
+                      <span className="font-semibold">{storiesUpdateLabel}</span>
+                    </div>
+                  </>
+                }
+                cta="Explorer ma bibliothèque"
+                className="md:col-span-2 lg:col-span-2"
+              />
+
+              <FeaturePanel
+                title="Atelier créatif"
+                description="Imagine, dessine et partage tes chefs-d'œuvre avec tes amis."
+                icon={<Palette className="h-6 w-6" />}
+                accentGradient="from-fuchsia-500 via-pink-500 to-rose-500"
+                onClick={handleDrawingPanelClick}
+                disabled={!currentChildId}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Palette className="h-4 w-4 text-pink-500" />
+                      <span className="font-semibold">{drawingsTotalLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Share2 className="h-4 w-4 text-rose-500" />
+                      <span>{drawingsSharedLabel}</span>
+                    </div>
+                  </>
+                }
+                cta="Ouvrir l'atelier créatif"
+                className="md:col-span-2 lg:col-span-2"
+              />
+
+              <FeaturePanel
+                title="Coach Devoirs PioPi"
+                description="Ton assistant intelligent disponible à tout moment pour t'aider."
+                icon={<Bot className="h-6 w-6" />}
+                accentGradient="from-purple-500 via-violet-500 to-indigo-500"
+                onClick={onCoachClick}
+                stats={
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-purple-500" />
+                      <span>Des réponses instantanées à tes questions</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-indigo-500" />
+                      <span className="font-semibold">Besoin d'aide ? Clique ici</span>
+                    </div>
+                  </>
+                }
+                cta="Parler au coach PioPi"
+              />
+
+              <FeaturePanel
+                title="Cours personnalisés"
+                description="Découvre les leçons uniques créées spécialement pour toi."
+                icon={<BookPlus className="h-6 w-6" />}
+                accentGradient="from-indigo-500 via-purple-500 to-pink-500"
+                onClick={handleCustomLessonsPanelClick}
+                badge={newCustomLessonsCount > 0 ? <NotificationBadge count={newCustomLessonsCount} gradient="from-indigo-500 via-purple-500 to-pink-500" /> : undefined}
+                stats={
+                  <div className="flex items-center gap-2">
+                    <BookPlus className="h-4 w-4 text-indigo-500" />
+                    <span className="font-semibold">{customLessonsLabel}</span>
                   </div>
-                </div>
-              )}
-
-              <div className="relative z-10">
-                <div className="relative inline-block mb-4">
-                  <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
-                  <div className="relative w-14 h-14 md:w-16 md:h-16 bg-white/30 backdrop-blur-sm rounded-2xl flex items-center justify-center">
-                    <BookPlus size={28} className="md:hidden text-white" />
-                    <BookPlus size={32} className="hidden md:block text-white" />
-                  </div>
-                </div>
-
-                <h2 className="text-xl md:text-2xl font-black mb-2">Cours Personnalisés</h2>
-                <p className="text-white/90 text-sm md:text-base mb-4 leading-relaxed">
-                  Apprends avec des leçons créées par tes parents
-                </p>
-
-                <div className="flex items-center gap-2 text-white/80 text-sm">
-                  <BookPlus size={18} />
-                  <span className="font-semibold">Leçons sur mesure</span>
-                </div>
-              </div>
+                }
+                cta="Découvrir mes leçons sur mesure"
+              />
             </div>
-            </div>
-
           </div>
         )}
 
