@@ -23,7 +23,7 @@ export function BirthdayNotificationCard({ onAction, className = '' }: BirthdayN
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">Anniversaire</p>
-            <h3 className="mt-2 text-2xl font-black leading-tight sm:text-3xl">C'est quand ta journée magique ?</h3>
+            <h3 className="mt-2 text-2xl font-black leading-tight sm:text-3xl">Anniversaire</h3>
             <p className="mt-3 text-sm text-white/80 sm:text-base">
               Indique-nous ta date pour recevoir un message surprise et des bonus scintillants le jour J.
             </p>

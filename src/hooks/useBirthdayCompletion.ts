@@ -27,8 +27,8 @@ export function useBirthdayCompletion(
   );
 
   useEffect(() => {
-    if (shouldPrompt) {
-      setIsModalOpen(true);
+    if (!shouldPrompt) {
+      setIsModalOpen(false);
     }
   }, [shouldPrompt]);
 
