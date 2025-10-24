@@ -215,7 +215,7 @@ CONTENU :
 - Personnages auxquels l'enfant peut s'identifier
 - Fin heureuse avec un message constructif
 
-L'histoire doit faire environ 100-150 mots maximum et être divisée en paragraphes courts pour faciliter la lecture.`;
+L'histoire doit faire environ 30-40 mots maximum et être divisée en paragraphes très courts (1 à 2 phrases) pour faciliter la lecture.`;
 
     const userPrompt = `Crée une histoire originale pour ${childName}, un enfant en ${gradeLevel}.
 

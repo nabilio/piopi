@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Trophy, Star, TrendingUp, Users, Palette, Share2 } from 'lucide-react';
+import { Heart, MessageCircle, Trophy, Star, TrendingUp, Users, Palette, Share2, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { DrawingDisplay } from './DrawingDisplay';
+import { StoryReader } from './StoryReader';
 
 type ActivityItem = {
   id: string;
@@ -36,6 +37,15 @@ export function SocialFeed({ onProfileClick }: SocialFeedProps = {}) {
   const { profile } = useAuth();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storyLoading, setStoryLoading] = useState(false);
+  const [storyError, setStoryError] = useState<string | null>(null);
+  const [sharedStory, setSharedStory] = useState<{
+    id: string;
+    title: string;
+    content: string;
+    theme: string;
+    grade_level: string;
+  } | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -121,6 +131,36 @@ export function SocialFeed({ onProfileClick }: SocialFeedProps = {}) {
       // Silently handle errors and reload feed anyway
       await loadActivityFeed();
     }
+  }
+
+  async function handleViewSharedStory(storyId: string) {
+    if (storyLoading) return;
+
+    try {
+      setStoryError(null);
+      setStoryLoading(true);
+
+      const { data, error } = await supabase
+        .from('stories')
+        .select('id, title, content, theme, grade_level')
+        .eq('id', storyId)
+        .maybeSingle();
+
+      if (error || !data) {
+        throw error || new Error('Story not found');
+      }
+
+      setSharedStory(data);
+    } catch (error) {
+      console.error('Error loading shared story:', error);
+      setStoryError("Impossible d'ouvrir cette histoire pour le moment.");
+    } finally {
+      setStoryLoading(false);
+    }
+  }
+
+  function closeSharedStory() {
+    setSharedStory(null);
   }
 
   function getActivityIcon(type: string) {
@@ -226,6 +266,16 @@ export function SocialFeed({ onProfileClick }: SocialFeedProps = {}) {
 
   return (
     <div className="space-y-4">
+      {sharedStory && (
+        <StoryReader story={sharedStory} onClose={closeSharedStory} />
+      )}
+
+      {storyError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+          {storyError}
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Fil d'Actualité</h2>
 
       {/* Featured Latest Drawing */}
@@ -399,6 +449,24 @@ export function SocialFeed({ onProfileClick }: SocialFeedProps = {}) {
               {/* Drawing display for drawing_shared activities */}
               {activity.activity_type === 'drawing_shared' && activity.content?.drawing_id && (
                 <DrawingDisplay drawingId={activity.content.drawing_id} title={activity.content.title} />
+              )}
+
+              {activity.activity_type === 'story_created' && activity.content?.story_id && (
+                <div className="mt-4">
+                  <a
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      handleViewSharedStory(activity.content.story_id);
+                    }}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition ${
+                      storyLoading ? 'bg-purple-200 text-purple-700 cursor-wait' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'
+                    }`}
+                  >
+                    <BookOpen size={16} />
+                    Lire l'histoire complète
+                  </a>
+                </div>
               )}
 
               {/* Reactions section */}
