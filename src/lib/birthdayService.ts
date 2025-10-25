@@ -75,6 +75,29 @@ function mapBirthdayUpdateError(message: string): string {
   return message;
 }
 
+async function updateProfileBirthdayDirectly(targetId: string, birthday: string) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      birthday,
+      birthday_completed: true,
+    })
+    .eq('id', targetId);
+
+  if (error) {
+    const fallbackMessage =
+      typeof error?.message === 'string' && error.message.trim() !== ''
+        ? error.message
+        : typeof error?.details === 'string' && error.details.trim() !== ''
+          ? error.details
+          : '';
+
+    throw new Error(mapBirthdayUpdateError(fallbackMessage));
+  }
+
+  return { childId: targetId, birthday };
+}
+
 type BirthdayUpdatePayload = {
   birthday: string;
   consent: boolean;
@@ -93,63 +116,65 @@ export async function submitBirthdayUpdate(
 ): Promise<{ childId: string; birthday: string }> {
   const normalized = normalizeBirthdayInput(birthday);
 
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-child-birthday`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      birthday: normalized,
-      consent,
-      childId,
-    }),
-  });
+  const fallbackTargetId = childId ?? sessionUserId;
+  const isSelfUpdate = Boolean(
+    sessionUserId
+    && fallbackTargetId
+    && sessionUserId === fallbackTargetId,
+  );
 
-  let payload: any = null;
   try {
-    payload = await response.json();
-  } catch (error) {
-    console.warn('Unable to parse update-child-birthday response as JSON', error);
-  }
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-child-birthday`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        birthday: normalized,
+        consent,
+        childId,
+      }),
+    });
 
-  if (!response.ok) {
-    const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
-    const mappedMessage = mapBirthdayUpdateError(rawMessage);
-
-    const fallbackTargetId = childId ?? sessionUserId;
-    const canAttemptFallback =
-      mappedMessage === 'Unexpected error'
-      && sessionUserId
-      && (!childId || childId === sessionUserId);
-
-    if (canAttemptFallback && fallbackTargetId) {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          birthday: normalized,
-          birthday_completed: true,
-        })
-        .eq('id', fallbackTargetId);
-
-      if (!error) {
-        return { childId: fallbackTargetId, birthday: normalized };
-      }
-
-      const fallbackMessage =
-        typeof error?.message === 'string' && error.message.trim() !== ''
-          ? error.message
-          : typeof error?.details === 'string' && error.details.trim() !== ''
-            ? error.details
-            : mappedMessage;
-
-      throw new Error(mapBirthdayUpdateError(fallbackMessage));
+    let payload: any = null;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      console.warn('Unable to parse update-child-birthday response as JSON', error);
     }
 
-    throw new Error(mappedMessage);
-  }
+    if (!response.ok) {
+      const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
+      const trimmedRawMessage = rawMessage.trim();
+      const mappedMessage = mapBirthdayUpdateError(trimmedRawMessage);
 
-  return payload as { childId: string; birthday: string };
+      const shouldAttemptFallback = isSelfUpdate
+        && Boolean(fallbackTargetId)
+        && (
+          trimmedRawMessage.toLowerCase().startsWith('unexpected error')
+          || (trimmedRawMessage === '' && response.status >= 500)
+        );
+
+      if (shouldAttemptFallback && fallbackTargetId) {
+        return await updateProfileBirthdayDirectly(fallbackTargetId, normalized);
+      }
+
+      throw new Error(mappedMessage);
+    }
+
+    return payload as { childId: string; birthday: string };
+  } catch (error) {
+    if (isSelfUpdate && fallbackTargetId) {
+      return await updateProfileBirthdayDirectly(fallbackTargetId, normalized);
+    }
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error('Impossible d\'enregistrer l\'anniversaire');
+  }
 }
 
 export async function fetchParentChildrenWithBirthdays(parentId: string): Promise<Profile[]> {

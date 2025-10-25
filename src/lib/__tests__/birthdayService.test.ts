@@ -38,6 +38,7 @@ describe('submitBirthdayUpdate', () => {
 
     const mockResponse = {
       ok: true,
+      status: 200,
       json: vi.fn().mockResolvedValue({ childId: 'child-1', birthday: '2014-03-18' }),
     } as unknown as Response;
 
@@ -68,6 +69,7 @@ describe('submitBirthdayUpdate', () => {
     const responsePayload = { error: 'Unexpected error' };
     const mockResponse = {
       ok: false,
+      status: 500,
       json: vi.fn().mockResolvedValue(responsePayload),
     } as unknown as Response;
 
@@ -94,6 +96,7 @@ describe('submitBirthdayUpdate', () => {
     const responsePayload = { error: 'Unexpected error' };
     const mockResponse = {
       ok: false,
+      status: 500,
       json: vi.fn().mockResolvedValue(responsePayload),
     } as unknown as Response;
 
@@ -109,5 +112,50 @@ describe('submitBirthdayUpdate', () => {
       childId: 'child-1',
       sessionUserId: 'child-1',
     })).rejects.toThrow('Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.');
+  });
+  it('déclenche le secours quand le message contient des détails inattendus', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    const responsePayload = { error: 'Unexpected error: database timeout' };
+    const mockResponse = {
+      ok: false,
+      status: 502,
+      json: vi.fn().mockResolvedValue(responsePayload),
+    } as unknown as Response;
+
+    vi.spyOn(global, 'fetch').mockResolvedValue(mockResponse);
+
+    const eqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+    vi.spyOn(supabase, 'from').mockReturnValue({ update: updateMock } as any);
+
+    const result = await submitBirthdayUpdate('token', {
+      birthday: '2014-03-18',
+      consent: true,
+      childId: 'child-1',
+      sessionUserId: 'child-1',
+    });
+
+    expect(eqMock).toHaveBeenCalledWith('id', 'child-1');
+    expect(result).toEqual({ childId: 'child-1', birthday: '2014-03-18' });
+  });
+
+  it('tente le secours quand la requête réseau échoue pour un enfant courant', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(global, 'fetch').mockRejectedValue(new Error('Network down'));
+
+    const eqMock = vi.fn().mockResolvedValue({ error: null });
+    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
+    vi.spyOn(supabase, 'from').mockReturnValue({ update: updateMock } as any);
+
+    const result = await submitBirthdayUpdate('token', {
+      birthday: '2014-03-18',
+      consent: true,
+      sessionUserId: 'child-1',
+    });
+
+    expect(eqMock).toHaveBeenCalledWith('id', 'child-1');
+    expect(result).toEqual({ childId: 'child-1', birthday: '2014-03-18' });
   });
 });
