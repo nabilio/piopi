@@ -63,7 +63,8 @@ function mapBirthdayUpdateError(message: string): string {
     return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
   }
 
-  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+  if (message.includes('Access to the profiles table is blocked by RLS policies')
+    || message.toLowerCase().includes('row-level security')) {
     return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
   }
 
@@ -74,17 +75,21 @@ function mapBirthdayUpdateError(message: string): string {
   return message;
 }
 
+type BirthdayUpdatePayload = {
+  birthday: string;
+  consent: boolean;
+  childId?: string;
+  sessionUserId?: string;
+};
+
 export async function submitBirthdayUpdate(
   accessToken: string,
   {
     birthday,
     consent,
     childId,
-  }: {
-    birthday: string;
-    consent: boolean;
-    childId?: string;
-  },
+    sessionUserId,
+  }: BirthdayUpdatePayload,
 ): Promise<{ childId: string; birthday: string }> {
   const normalized = normalizeBirthdayInput(birthday);
 
@@ -101,11 +106,47 @@ export async function submitBirthdayUpdate(
     }),
   });
 
-  const payload = await response.json();
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    console.warn('Unable to parse update-child-birthday response as JSON', error);
+  }
 
   if (!response.ok) {
     const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
-    throw new Error(mapBirthdayUpdateError(rawMessage));
+    const mappedMessage = mapBirthdayUpdateError(rawMessage);
+
+    const fallbackTargetId = childId ?? sessionUserId;
+    const canAttemptFallback =
+      mappedMessage === 'Unexpected error'
+      && sessionUserId
+      && (!childId || childId === sessionUserId);
+
+    if (canAttemptFallback && fallbackTargetId) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          birthday: normalized,
+          birthday_completed: true,
+        })
+        .eq('id', fallbackTargetId);
+
+      if (!error) {
+        return { childId: fallbackTargetId, birthday: normalized };
+      }
+
+      const fallbackMessage =
+        typeof error?.message === 'string' && error.message.trim() !== ''
+          ? error.message
+          : typeof error?.details === 'string' && error.details.trim() !== ''
+            ? error.details
+            : mappedMessage;
+
+      throw new Error(mapBirthdayUpdateError(fallbackMessage));
+    }
+
+    throw new Error(mappedMessage);
   }
 
   return payload as { childId: string; birthday: string };
