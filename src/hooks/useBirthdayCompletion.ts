@@ -60,6 +60,7 @@ export function useBirthdayCompletion(
         birthday,
         consent,
         childId,
+        sessionUserId: session.user?.id,
       });
 
       await refreshProfile();

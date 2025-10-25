@@ -63,7 +63,8 @@ function mapBirthdayUpdateError(message: string): string {
     return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
   }
 
-  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+  if (message.includes('Access to the profiles table is blocked by RLS policies')
+    || message.toLowerCase().includes('row-level security')) {
     return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
   }
 
@@ -74,41 +75,106 @@ function mapBirthdayUpdateError(message: string): string {
   return message;
 }
 
+async function updateProfileBirthdayDirectly(targetId: string, birthday: string) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      birthday,
+      birthday_completed: true,
+    })
+    .eq('id', targetId);
+
+  if (error) {
+    const fallbackMessage =
+      typeof error?.message === 'string' && error.message.trim() !== ''
+        ? error.message
+        : typeof error?.details === 'string' && error.details.trim() !== ''
+          ? error.details
+          : '';
+
+    throw new Error(mapBirthdayUpdateError(fallbackMessage));
+  }
+
+  return { childId: targetId, birthday };
+}
+
+type BirthdayUpdatePayload = {
+  birthday: string;
+  consent: boolean;
+  childId?: string;
+  sessionUserId?: string;
+};
+
 export async function submitBirthdayUpdate(
   accessToken: string,
   {
     birthday,
     consent,
     childId,
-  }: {
-    birthday: string;
-    consent: boolean;
-    childId?: string;
-  },
+    sessionUserId,
+  }: BirthdayUpdatePayload,
 ): Promise<{ childId: string; birthday: string }> {
   const normalized = normalizeBirthdayInput(birthday);
 
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-child-birthday`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      birthday: normalized,
-      consent,
-      childId,
-    }),
-  });
+  const fallbackTargetId = childId ?? sessionUserId;
+  const isSelfUpdate = Boolean(
+    sessionUserId
+    && fallbackTargetId
+    && sessionUserId === fallbackTargetId,
+  );
 
-  const payload = await response.json();
+  try {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-child-birthday`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        birthday: normalized,
+        consent,
+        childId,
+      }),
+    });
 
-  if (!response.ok) {
-    const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
-    throw new Error(mapBirthdayUpdateError(rawMessage));
+    let payload: any = null;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      console.warn('Unable to parse update-child-birthday response as JSON', error);
+    }
+
+    if (!response.ok) {
+      const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
+      const trimmedRawMessage = rawMessage.trim();
+      const mappedMessage = mapBirthdayUpdateError(trimmedRawMessage);
+
+      const shouldAttemptFallback = isSelfUpdate
+        && Boolean(fallbackTargetId)
+        && (
+          trimmedRawMessage.toLowerCase().startsWith('unexpected error')
+          || (trimmedRawMessage === '' && response.status >= 500)
+        );
+
+      if (shouldAttemptFallback && fallbackTargetId) {
+        return await updateProfileBirthdayDirectly(fallbackTargetId, normalized);
+      }
+
+      throw new Error(mappedMessage);
+    }
+
+    return payload as { childId: string; birthday: string };
+  } catch (error) {
+    if (isSelfUpdate && fallbackTargetId) {
+      return await updateProfileBirthdayDirectly(fallbackTargetId, normalized);
+    }
+
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    throw new Error('Impossible d\'enregistrer l\'anniversaire');
   }
-
-  return payload as { childId: string; birthday: string };
 }
 
 export async function fetchParentChildrenWithBirthdays(parentId: string): Promise<Profile[]> {
