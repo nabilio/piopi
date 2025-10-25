@@ -60,9 +60,6 @@ export function BirthdayCard({ currentChildId, onManageFriends }: BirthdayCardPr
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [childBirthday, setChildBirthday] = useState<string | null>(null);
-  const [editingBirthday, setEditingBirthday] = useState(false);
-  const [birthdayInput, setBirthdayInput] = useState('');
-  const [updatingBirthday, setUpdatingBirthday] = useState(false);
   const [friendsWithBirthdays, setFriendsWithBirthdays] = useState<FriendBirthday[]>([]);
   const [friendsWithoutBirthday, setFriendsWithoutBirthday] = useState<Profile[]>([]);
   const [wishSelections, setWishSelections] = useState<Record<string, { message: string; gift: string }>>({});
@@ -209,29 +206,6 @@ export function BirthdayCard({ currentChildId, onManageFriends }: BirthdayCardPr
     }
   }
 
-  async function handleSaveBirthday() {
-    if (!currentChildId || !birthdayInput) return;
-    setUpdatingBirthday(true);
-    setFeedback(null);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ birthday: birthdayInput })
-        .eq('id', currentChildId);
-
-      if (error) throw error;
-
-      setChildBirthday(birthdayInput);
-      setEditingBirthday(false);
-      setFeedback({ type: 'success', message: 'Ta date d\'anniversaire a été enregistrée !' });
-    } catch (error) {
-      console.error('Error updating birthday:', error);
-      setFeedback({ type: 'error', message: 'Oups, impossible de sauvegarder la date. Réessaie plus tard.' });
-    } finally {
-      setUpdatingBirthday(false);
-    }
-  }
-
   async function handleWishFriend(friend: FriendBirthday) {
     if (!currentChildId) return;
     const selection = wishSelections[friend.id] || {
@@ -280,7 +254,7 @@ export function BirthdayCard({ currentChildId, onManageFriends }: BirthdayCardPr
     }));
   }
 
-  const canEditBirthday = profile?.role === 'child' || profile?.role === 'parent';
+  const isChild = profile?.role === 'child';
 
   return (
     <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl shadow-2xl p-5 md:p-6 text-white relative overflow-hidden">
@@ -318,7 +292,7 @@ export function BirthdayCard({ currentChildId, onManageFriends }: BirthdayCardPr
                 <CalendarHeart size={20} className="text-pink-200" />
                 Mon anniversaire
               </h3>
-              {loading ? (
+            {loading ? (
                 <p className="text-white/80 text-sm mt-2">Chargement...</p>
               ) : childBirthday ? (
                 <p className="text-white font-semibold text-lg mt-1">
@@ -326,43 +300,13 @@ export function BirthdayCard({ currentChildId, onManageFriends }: BirthdayCardPr
                 </p>
               ) : (
                 <p className="text-white/80 text-sm mt-2">
-                  Dis-nous quand tu fêtes ton anniversaire pour recevoir des surprises personnalisées !
+                  {isChild
+                    ? 'Ta date d\'anniversaire n\'est pas encore renseignée. Demande à ton parent de l\'ajouter depuis son espace parent.'
+                    : 'Ajoutez cette date depuis votre profil parent pour débloquer les surprises anniversaires.'}
                 </p>
               )}
             </div>
-            {canEditBirthday && (
-              <button
-                onClick={() => {
-                  if (!editingBirthday) {
-                    setBirthdayInput(childBirthday || '');
-                  }
-                  setEditingBirthday(!editingBirthday);
-                }}
-                className="bg-white/20 hover:bg-white/30 transition-colors text-white text-sm font-semibold px-3 py-2 rounded-xl"
-              >
-                {editingBirthday ? 'Annuler' : childBirthday ? 'Modifier' : 'Ajouter'}
-              </button>
-            )}
           </div>
-
-          {editingBirthday && (
-            <div className="mt-4 flex flex-col gap-3">
-              <input
-                type="date"
-                value={birthdayInput}
-                onChange={(event) => setBirthdayInput(event.target.value)}
-                className="px-3 py-2 rounded-lg text-gray-900"
-                max="2099-12-31"
-              />
-              <button
-                onClick={handleSaveBirthday}
-                disabled={!birthdayInput || updatingBirthday}
-                className="flex items-center justify-center gap-2 bg-emerald-400 hover:bg-emerald-500 text-emerald-900 font-bold px-3 py-2 rounded-xl transition-colors disabled:opacity-60"
-              >
-                {updatingBirthday ? 'Enregistrement...' : 'Sauvegarder'}
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="space-y-5">

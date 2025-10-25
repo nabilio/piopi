@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarDays, Loader2, PartyPopper, MapPin, Clock, CheckCircle2, XCircle, Filter, Sparkles } from 'lucide-react';
-import { Profile, BirthdayInvitation } from '../lib/supabase';
+import { Profile, BirthdayInvitation, supabase } from '../lib/supabase';
 import {
   computeUpcomingBirthdays,
   fetchBirthdayInvitations,
   fetchParentChildrenWithBirthdays,
   respondToBirthdayInvitation,
   BirthdayResponseStatus,
+  submitBirthdayUpdate,
 } from '../lib/birthdayService';
+import { ChildBirthdayModal } from './ChildBirthdayModal';
 
 const FILTERS = [
   { value: 'pending', label: 'En attente' },
@@ -31,6 +33,9 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<InvitationFilter>('pending');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedChildForBirthday, setSelectedChildForBirthday] = useState<Profile | null>(null);
+  const [birthdayModalError, setBirthdayModalError] = useState<string | null>(null);
+  const [birthdayModalLoading, setBirthdayModalLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -87,6 +92,54 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
     }
   }
 
+  function openBirthdayModal(child: Profile) {
+    setSelectedChildForBirthday(child);
+    setBirthdayModalError(null);
+    setBirthdayModalLoading(false);
+  }
+
+  function closeBirthdayModal() {
+    setSelectedChildForBirthday(null);
+    setBirthdayModalError(null);
+    setBirthdayModalLoading(false);
+  }
+
+  async function handleBirthdaySubmit({ birthday }: { birthday: string; consent: boolean }) {
+    if (!selectedChildForBirthday) {
+      return;
+    }
+
+    setBirthdayModalLoading(true);
+    setBirthdayModalError(null);
+    setError(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Session expirée, veuillez vous reconnecter.');
+      }
+
+      await submitBirthdayUpdate(session.access_token, {
+        birthday,
+        consent: true,
+        childId: selectedChildForBirthday.id,
+        sessionUserId: session.user?.id,
+      });
+
+      setActionMessage(`Anniversaire enregistré pour ${selectedChildForBirthday.full_name}.`);
+      closeBirthdayModal();
+      await loadData();
+    } catch (err) {
+      setBirthdayModalError(
+        err instanceof Error
+          ? err.message
+          : 'Impossible d\'enregistrer la date d\'anniversaire',
+      );
+    } finally {
+      setBirthdayModalLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 flex items-center justify-center">
@@ -128,7 +181,7 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
               </div>
             </div>
             <p className="mt-3 text-sm text-gray-600">
-              Ajoutez les dates d'anniversaire pour personnaliser les surprises et préparer les invitations.
+              Ajoutez les dates d'anniversaire de vos enfants depuis cet espace pour préparer les surprises et gérer les invitations.
             </p>
           </div>
 
@@ -203,7 +256,7 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
 
           {upcomingBirthdays.length === 0 ? (
             <p className="rounded-2xl bg-purple-50 p-6 text-sm text-purple-700">
-              Aucune date enregistrée pour le moment. Demandez à vos enfants de compléter leur anniversaire depuis leur tableau de bord.
+              Aucune date enregistrée pour le moment. Renseignez les anniversaires de vos enfants depuis votre profil parent pour débloquer les surprises.
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
@@ -219,13 +272,31 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
                     </div>
                   </div>
                   {child.birthday_completed ? (
-                    <p className="mt-3 text-sm text-gray-600">
-                      Anniversaire enregistré, planifiez vos surprises pour le {nextOccurrence.toLocaleDateString('fr-FR')}.
-                    </p>
+                    <div className="mt-3 flex flex-col gap-3 text-sm text-gray-600">
+                      <p>
+                        Anniversaire enregistré, planifiez vos surprises pour le {nextOccurrence.toLocaleDateString('fr-FR')}.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openBirthdayModal(child)}
+                        className="self-start rounded-2xl border border-purple-200 px-3 py-1.5 font-semibold text-purple-600 transition hover:bg-purple-50"
+                      >
+                        Modifier la date
+                      </button>
+                    </div>
                   ) : (
-                    <p className="mt-3 text-sm text-orange-600">
-                      Anniversaire non confirmé. L'enfant doit compléter ses informations.
-                    </p>
+                    <div className="mt-3 space-y-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-700">
+                      <p>
+                        Date d'anniversaire manquante. Ajoutez-la depuis votre espace parent pour que votre enfant profite des surprises personnalisées.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openBirthdayModal(child)}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 font-semibold text-white transition hover:bg-orange-600"
+                      >
+                        Ajouter la date d'anniversaire
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -349,7 +420,20 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
             </div>
           )}
         </section>
-      </div>
+    </div>
+
+      <ChildBirthdayModal
+        isOpen={Boolean(selectedChildForBirthday)}
+        onClose={closeBirthdayModal}
+        onSubmit={handleBirthdaySubmit}
+        loading={birthdayModalLoading}
+        error={birthdayModalError}
+        successMessage={null}
+        onResetFeedback={() => setBirthdayModalError(null)}
+        defaultBirthday={selectedChildForBirthday?.birthday ?? null}
+        mode="parent"
+        childName={selectedChildForBirthday?.full_name}
+      />
     </div>
   );
 }

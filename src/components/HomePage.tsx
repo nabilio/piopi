@@ -4,15 +4,12 @@ import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useGamification } from '../hooks/useGamification';
-import { useBirthdayCompletion } from '../hooks/useBirthdayCompletion';
 import { AvatarDisplay } from './AvatarDisplay';
 import { BattleSetup } from './BattleSetup';
 import { BattleHub } from './BattleHub';
 import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
-import { BirthdayNotificationCard } from './BirthdayNotificationCard';
-import { ChildBirthdayModal } from './ChildBirthdayModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -102,7 +99,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const { profile, user, refreshProfile } = useAuth();
   const { totalPoints } = useGamification();
-  const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile);
   const [children, setChildren] = useState<Profile[]>([]);
   const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -1010,12 +1006,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 }
                 className="min-h-[260px]"
               />
-              {birthdayCompletion.shouldPrompt ? (
-                <BirthdayNotificationCard
-                  onAction={birthdayCompletion.openModal}
-                  className="min-h-[260px]"
-                />
-              ) : null}
             </div>
           </div>
         )}
@@ -1028,16 +1018,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
 
       </div>
 
-      <ChildBirthdayModal
-        isOpen={birthdayCompletion.isModalOpen}
-        onClose={birthdayCompletion.closeModal}
-        onSubmit={birthdayCompletion.submitBirthday}
-        loading={birthdayCompletion.loading}
-        error={birthdayCompletion.error}
-        successMessage={birthdayCompletion.successMessage}
-        onResetFeedback={birthdayCompletion.resetFeedback}
-        defaultBirthday={profile?.birthday ?? null}
-      />
 
     </div>
   );

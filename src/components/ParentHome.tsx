@@ -441,7 +441,7 @@ export function ParentHome({ onChildSelect, onNavigate }: ParentHomeProps) {
                     <p className="text-sm text-gray-600">Suivez les dates clés et confirmez rapidement les invitations.</p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-700">Chaque enfant peut renseigner sa date d'anniversaire depuis son espace pour débloquer des surprises personnalisées.</p>
+                <p className="text-sm text-gray-700">Ajoutez la date d'anniversaire de chaque enfant depuis votre espace parent pour débloquer des surprises personnalisées.</p>
                 <button
                   type="button"
                   onClick={() => onNavigate && onNavigate('parent-birthdays')}
