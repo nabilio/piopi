@@ -22,8 +22,8 @@ export function useBirthdayCompletion(
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const shouldPrompt = useMemo(
-    () => profile?.role === 'child' && !profile?.birthday_completed,
-    [profile?.role, profile?.birthday_completed],
+    () => profile?.role === 'parent' && Boolean(options.childIdOverride) && !profile?.birthday_completed,
+    [options.childIdOverride, profile?.birthday_completed, profile?.role],
   );
 
   useEffect(() => {
@@ -34,11 +34,16 @@ export function useBirthdayCompletion(
 
   const submitBirthday = useCallback(async ({ birthday, consent }: SubmitArgs) => {
     if (!profile?.id) {
-      throw new Error('Profil enfant introuvable');
+      throw new Error('Profil utilisateur introuvable');
     }
 
     if (!consent) {
       setError('Le consentement parental est obligatoire.');
+      return;
+    }
+
+    if (profile.role === 'child' && !options.childIdOverride) {
+      setError('Seuls les parents peuvent enregistrer la date d\'anniversaire.');
       return;
     }
 
@@ -52,14 +57,19 @@ export function useBirthdayCompletion(
         throw new Error('Session expirée, veuillez vous reconnecter.');
       }
 
-      const childId = profile.role === 'parent'
+      const targetChildId = profile.role === 'parent'
         ? options.childIdOverride
         : profile.id;
+
+      if (profile.role === 'parent' && !targetChildId) {
+        setError('Sélectionnez un enfant pour enregistrer sa date d\'anniversaire.');
+        return;
+      }
 
       await submitBirthdayUpdate(session.access_token, {
         birthday,
         consent,
-        childId,
+        childId: targetChildId,
         sessionUserId: session.user?.id,
       });
 

@@ -10,6 +10,8 @@ type ChildBirthdayModalProps = {
   successMessage?: string | null;
   onResetFeedback?: () => void;
   defaultBirthday?: string | null;
+  mode?: 'child' | 'parent';
+  childName?: string;
 };
 
 export function ChildBirthdayModal({
@@ -21,17 +23,32 @@ export function ChildBirthdayModal({
   successMessage = null,
   onResetFeedback,
   defaultBirthday = null,
+  mode = 'child',
+  childName,
 }: ChildBirthdayModalProps) {
   const [birthday, setBirthday] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [consent, setConsent] = useState(mode === 'parent');
 
   useEffect(() => {
     if (isOpen) {
       setBirthday(defaultBirthday ?? '');
-      setConsent(false);
+      setConsent(mode === 'parent');
       onResetFeedback?.();
     }
-  }, [defaultBirthday, isOpen, onResetFeedback]);
+  }, [defaultBirthday, isOpen, mode, onResetFeedback]);
+
+  const isParentMode = mode === 'parent';
+
+  const modalTitle = isParentMode
+    ? `Ajoutons l'anniversaire de ${childName ?? 'votre enfant'}`
+    : 'Préparons ton anniversaire 🎂';
+
+  const modalSubtitle = isParentMode
+    ? "Indiquez la date de naissance pour organiser des surprises personnalisées."
+    : 'Avec l\'accord de ton parent, indique ta date pour recevoir des surprises personnalisées.';
+
+  const submitLabel = isParentMode ? 'Enregistrer la date' : 'Valider avec mon parent';
+  const cancelLabel = isParentMode ? 'Annuler' : 'Plus tard';
 
   if (!isOpen) {
     return null;
@@ -39,7 +56,7 @@ export function ChildBirthdayModal({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    await onSubmit({ birthday, consent });
+    await onSubmit({ birthday, consent: isParentMode ? true : consent });
   };
 
   return (
@@ -60,10 +77,8 @@ export function ChildBirthdayModal({
               <CalendarHeart className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Préparons ton anniversaire 🎂</h2>
-              <p className="text-sm text-white/90">
-                Avec l'accord de ton parent, indique ta date pour recevoir des surprises personnalisées.
-              </p>
+              <h2 className="text-xl font-bold">{modalTitle}</h2>
+              <p className="text-sm text-white/90">{modalSubtitle}</p>
             </div>
           </div>
         </div>
@@ -84,18 +99,20 @@ export function ChildBirthdayModal({
             />
           </div>
 
-          <label className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-purple-50/50 p-4 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              checked={consent}
-              onChange={(event) => setConsent(event.target.checked)}
-              required
-            />
-            <span>
-              Je confirme que mon parent ou responsable légal est d'accord pour que je partage ma date d'anniversaire.
-            </span>
-          </label>
+          {!isParentMode && (
+            <label className="flex items-start gap-3 rounded-2xl border border-purple-100 bg-purple-50/50 p-4 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                checked={consent}
+                onChange={(event) => setConsent(event.target.checked)}
+                required
+              />
+              <span>
+                Je confirme que mon parent ou responsable légal est d'accord pour que je partage ma date d'anniversaire.
+              </span>
+            </label>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -117,14 +134,14 @@ export function ChildBirthdayModal({
               onClick={onClose}
               className="inline-flex items-center justify-center rounded-2xl border border-gray-200 px-5 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
             >
-              Plus tard
+              {cancelLabel}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:from-purple-600 hover:to-pink-600 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {loading ? 'Enregistrement...' : 'Valider avec mon parent'}
+              {loading ? 'Enregistrement...' : submitLabel}
             </button>
           </div>
         </form>
