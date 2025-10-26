@@ -11,6 +11,7 @@ import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
 import { BirthdayNotificationCard } from './BirthdayNotificationCard';
+import { DrawingStudioModal } from './DrawingStudioModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -120,7 +121,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [showDrawingStudio, setShowDrawingStudio] = useState(false);
   const [drawingStats, setDrawingStats] = useState({ total: 0, shared: 0 });
 
-  const currentChildId = selectedChild?.id || profile?.id || null;
+  const currentChildId = selectedChild?.id || profile?.id || user?.id || null;
 
   const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
@@ -1025,6 +1026,14 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
       </div>
+
+      {showDrawingStudio && currentChildId ? (
+        <DrawingStudioModal
+          childId={currentChildId}
+          onClose={() => setShowDrawingStudio(false)}
+          onUpdated={setDrawingStats}
+        />
+      ) : null}
     </div>
   );
 }
