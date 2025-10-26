@@ -29,7 +29,7 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
 
   useEffect(() => {
     const paragraphs = story.content.split('\n\n').filter(p => p.trim());
-    const wordsPerPage = 50;
+    const wordsPerPage = 12;
     const newPages: string[] = [];
     let currentPageContent = '';
     let wordCount = 0;
@@ -123,11 +123,11 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             </div>
 
             {isLastPage && (
-              <div className="flex justify-center items-center gap-4 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 animate-fadeIn w-full sm:w-auto">
                 <button
                   onClick={handleShare}
                   disabled={sharing || shared}
-                  className={`relative flex items-center gap-2 font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed ${
+                  className={`relative flex items-center justify-center gap-2 font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed w-full sm:w-auto ${
                     shared
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
                       : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
@@ -139,14 +139,14 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
                 {onStartQuiz && (
                   <button
                     onClick={onStartQuiz}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                   >
                     Commencer le quiz 🎯
                   </button>
                 )}
                 <button
                   onClick={onClose}
-                  className="flex items-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                 >
                   <ArrowLeft size={24} />
                   Retour
@@ -165,7 +165,7 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             </button>
 
             <div className="w-full md:flex-1 md:max-w-3xl flex items-center">
-              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 w-full min-h-[60vh] md:min-h-0 md:h-full flex flex-col relative overflow-hidden">
+              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 w-full min-h-[15vh] md:min-h-0 md:h-full flex flex-col relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400" />
 
                 <div className="flex-1 flex items-center justify-center overflow-y-auto px-1 sm:px-2">
