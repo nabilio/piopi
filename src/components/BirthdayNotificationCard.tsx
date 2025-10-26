@@ -23,9 +23,9 @@ export function BirthdayNotificationCard({ onAction, className = '' }: BirthdayN
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">Anniversaire</p>
-            <h3 className="mt-2 text-2xl font-black leading-tight sm:text-3xl">Anniversaire</h3>
+            <h3 className="mt-2 text-2xl font-black leading-tight sm:text-3xl">Anniversaires magiques</h3>
             <p className="mt-3 text-sm text-white/80 sm:text-base">
-              Indique-nous ta date pour recevoir un message surprise et des bonus scintillants le jour J.
+              Découvre les fêtes à venir et prépare des messages surprise pour tes amis.
             </p>
           </div>
         </div>
@@ -37,7 +37,7 @@ export function BirthdayNotificationCard({ onAction, className = '' }: BirthdayN
           </div>
           <div className="flex items-center gap-2 text-sm text-white/90">
             <Sparkles className="h-4 w-4" />
-            <span className="font-semibold">Ajouter ma date</span>
+            <span className="font-semibold">Ouvrir la page anniversaire</span>
             <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </div>
         </div>
