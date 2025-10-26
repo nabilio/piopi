@@ -283,18 +283,7 @@ export function computeNextBirthday(
   return { date: next, daysUntil };
 }
 
-function mapProfileToRecord(profile: any): ChildBirthdayRecord {
-  const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
-  const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
-
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
-  const diff = next.getTime() - today.getTime();
-  const daysUntil = Math.round(diff / millisecondsPerDay);
-
-  return { date: next, daysUntil };
-}
-
-function mapProfileToRecord(profile: any): ChildBirthdayRecord {
+function toChildBirthdayRecord(profile: any): ChildBirthdayRecord {
   const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
   const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
 
@@ -362,7 +351,7 @@ export async function fetchChildBirthday(childId: string): Promise<ChildBirthday
     throw new Error('Profil enfant introuvable.');
   }
 
-  return mapProfileToRecord(data);
+  return toChildBirthdayRecord(data);
 }
 
 export async function fetchParentChildBirthdays(parentId: string): Promise<ChildBirthdayRecord[]> {
@@ -386,7 +375,7 @@ export async function fetchParentChildBirthdays(parentId: string): Promise<Child
     throw new Error('Impossible de charger les anniversaires.');
   }
 
-  return (data ?? []).map(mapProfileToRecord);
+  return (data ?? []).map(toChildBirthdayRecord);
 }
 
 export async function updateChildBirthday(
