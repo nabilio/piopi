@@ -113,7 +113,7 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
       </button>
 
       <div className="h-full flex items-center justify-center p-4 md:p-8">
-        <div className="max-w-4xl w-full h-full flex flex-col">
+        <div className="max-w-5xl w-full h-full flex flex-col">
           <div className="text-center mb-6">
             <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg mb-4">
               <BookOpen size={24} className="text-amber-600" />
@@ -155,26 +155,26 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             )}
           </div>
 
-          <div className="flex-1 flex items-center justify-center gap-4">
+          <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-4 w-full">
             <button
               onClick={prevPage}
               disabled={currentPage === 0}
-              className="p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="hidden md:flex p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft size={32} className="text-gray-700" />
             </button>
 
-            <div className="flex-1 max-w-2xl aspect-square flex items-center">
-              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-12 w-full h-full flex flex-col relative overflow-hidden">
+            <div className="w-full md:flex-1 md:max-w-3xl flex items-center">
+              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 w-full min-h-[60vh] md:min-h-0 md:h-full flex flex-col relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400" />
 
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-gray-900 leading-relaxed whitespace-pre-wrap font-bold text-2xl md:text-3xl text-center">
+                <div className="flex-1 flex items-center justify-center overflow-y-auto px-1 sm:px-2">
+                  <div className="text-gray-900 leading-relaxed whitespace-pre-wrap font-bold text-lg sm:text-xl md:text-2xl text-center">
                     {pages[currentPage]}
                   </div>
                 </div>
 
-                <div className="absolute bottom-6 right-8 text-sm font-semibold text-gray-400">
+                <div className="hidden md:block absolute bottom-6 right-8 text-sm font-semibold text-gray-400">
                   Page {currentPage + 1} / {pages.length}
                 </div>
               </div>
@@ -183,10 +183,34 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             <button
               onClick={nextPage}
               disabled={isLastPage}
-              className="p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="hidden md:flex p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <ChevronRight size={32} className="text-gray-700" />
             </button>
+
+            <div className="flex md:hidden items-center justify-between gap-4 w-full mt-4">
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 0}
+                className="flex-1 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                <ChevronLeft size={24} className="text-gray-700" />
+                <span className="font-semibold">Précédent</span>
+              </button>
+
+              <div className="text-sm font-semibold text-gray-500 whitespace-nowrap">
+                Page {currentPage + 1} / {pages.length}
+              </div>
+
+              <button
+                onClick={nextPage}
+                disabled={isLastPage}
+                className="flex-1 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                <span className="font-semibold">Suivant</span>
+                <ChevronRight size={24} className="text-gray-700" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
