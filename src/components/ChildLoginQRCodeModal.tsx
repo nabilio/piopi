@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { QrCode, RefreshCw, Copy, Check, X, Smartphone, ShieldCheck } from 'lucide-react';
+import { QrCode, RefreshCw, X, Smartphone } from 'lucide-react';
 import { supabase, type Profile } from '../lib/supabase';
 
 const QR_IMAGE_BASE_URL = 'https://api.qrserver.com/v1/create-qr-code/';
@@ -17,22 +17,13 @@ type GenerateLinkResponse = {
 
 export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalProps) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = useState<string | null | undefined>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     void refreshQr();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child.id]);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timeout = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [copied]);
 
   async function refreshQr() {
     setLoading(true);
@@ -55,9 +46,7 @@ export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalP
 
       const qrImage = `${QR_IMAGE_BASE_URL}?size=420x420&data=${encodeURIComponent(data.loginLink)}`;
 
-      setLink(data.loginLink);
       setQrUrl(qrImage);
-      setExpiresAt(data.expiresAt);
     } catch (err) {
       console.error('Error while generating child login QR code:', err);
       setError((err as Error).message || 'Une erreur est survenue lors de la génération du QR code.');
@@ -66,23 +55,9 @@ export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalP
     }
   }
 
-  async function handleCopyLink() {
-    if (!link) return;
-
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-    } catch (err) {
-      console.error('Unable to copy QR login link:', err);
-      setError("Impossible de copier le lien. Vous pouvez copier manuellement l'URL affichée ci-dessous.");
-    }
-  }
-
-  const expiresLabel = expiresAt ? new Date(expiresAt).toLocaleTimeString() : null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-3xl rounded-3xl bg-white shadow-2xl">
         <button
           type="button"
           onClick={onClose}
@@ -108,7 +83,7 @@ export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalP
               </div>
             </div>
 
-            <div className="flex flex-col gap-6 md:grid md:grid-cols-[1.1fr_minmax(0,1fr)] md:items-start md:gap-8">
+            <div className="flex flex-col gap-6 md:grid md:grid-cols-[minmax(0,1fr)_minmax(320px,1fr)] md:items-start md:gap-8">
               <div className="space-y-6">
                 <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600 md:text-base">
                   <div className="flex items-start gap-3">
@@ -123,49 +98,9 @@ export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalP
                     </div>
                   </div>
                 </div>
-
-                {link && !loading && !error ? (
-                  <div className="space-y-3 rounded-2xl border border-purple-100 bg-purple-50/70 p-4 text-sm text-gray-700">
-                    <div className="flex items-start gap-3">
-                      <ShieldCheck className="mt-0.5 h-5 w-5 text-purple-500" />
-                      <div>
-                        <p className="font-semibold text-purple-700">Sécurité du lien</p>
-                        <p className="text-xs text-purple-600 md:text-sm">
-                          Ce lien est temporaire et réservé à {child.full_name}. Partagez-le uniquement avec votre enfant.
-                        </p>
-                        {expiresLabel ? (
-                          <p className="mt-2 text-xs text-gray-500">Expiration estimée : {expiresLabel}</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="break-words rounded-xl bg-white p-3 text-xs text-gray-600 md:text-sm">
-                      {link}
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={handleCopyLink}
-                        className="inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-black"
-                      >
-                        {copied ? <Check size={16} /> : <Copy size={16} />}
-                        {copied ? 'Lien copié !' : 'Copier le lien'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={refreshQr}
-                        className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-purple-400 hover:text-purple-600"
-                      >
-                        <RefreshCw size={16} />
-                        Nouveau lien
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
               </div>
 
-              <div className="flex flex-col items-center gap-4 rounded-3xl bg-white/70 p-4 md:p-6">
+              <div className="flex flex-col items-center gap-4 rounded-2xl bg-gradient-to-b from-purple-50/80 via-white to-white p-4 md:min-h-[22rem] md:justify-center md:p-6">
                 {loading ? (
                   <div className="flex h-48 w-48 items-center justify-center">
                     <div className="h-16 w-16 animate-spin rounded-full border-4 border-purple-500 border-t-transparent" />
@@ -188,7 +123,7 @@ export function ChildLoginQRCodeModal({ child, onClose }: ChildLoginQRCodeModalP
                       <img
                         src={qrUrl}
                         alt={`QR code de connexion pour ${child.full_name}`}
-                        className="h-64 w-64 max-w-full rounded-2xl"
+                        className="h-60 w-60 max-w-full rounded-2xl md:h-64 md:w-64"
                       />
                     </div>
                     <button
