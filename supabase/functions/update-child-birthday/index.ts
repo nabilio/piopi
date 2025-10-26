@@ -10,7 +10,7 @@ type ProfileRecord = {
 };
 
 type RequestBody = {
-  birthday?: string;
+  birthday?: string | null;
   consent?: boolean;
   childId?: string;
 };
@@ -133,7 +133,10 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       throw new Error('Parental consent is required');
     }
 
-    const normalizedBirthday = normalizeBirthday(birthday);
+    const normalizedBirthday =
+      birthday === null || birthday === undefined || birthday === ''
+        ? null
+        : normalizeBirthday(birthday);
 
     const { data: requesterProfileData, error: profileError } = await supabase
       .from('profiles')
@@ -196,9 +199,11 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       throw error;
     }
 
+    const completionValue = normalizedBirthday ? true : false;
+
     const { error: completionUpdateError } = await supabase
       .from('profiles')
-      .update({ birthday_completed: true })
+      .update({ birthday_completed: completionValue })
       .eq('id', targetChildId);
 
     if (completionUpdateError && !isMissingBirthdayCompletionColumn(completionUpdateError)) {

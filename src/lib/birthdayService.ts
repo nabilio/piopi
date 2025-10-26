@@ -8,14 +8,14 @@ export type ChildBirthdayRecord = {
 };
 
 export type UpdateBirthdayParams = {
-  birthday: string;
+  birthday: string | null;
   consent: boolean;
   childId?: string;
 };
 
 export type UpdateBirthdayResult = {
   childId: string;
-  birthday: string;
+  birthday: string | null;
 };
 
 const ISO_BIRTHDAY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -325,7 +325,11 @@ function isMissingBirthdayCompletionColumn(error: unknown): boolean {
   }
 
   const normalized = message.toLowerCase();
-  return normalized.includes('birthday_completed') && normalized.includes('does not exist');
+  if (!normalized.includes('birthday_completed')) {
+    return false;
+  }
+
+  return normalized.includes('does not exist') || normalized.includes('schema cache');
 }
 
 export async function fetchChildBirthday(childId: string): Promise<ChildBirthdayRecord> {
@@ -378,6 +382,55 @@ export async function fetchParentChildBirthdays(parentId: string): Promise<Child
   return (data ?? []).map(toChildBirthdayRecord);
 }
 
+export async function fetchChildFriendBirthdays(childId: string): Promise<ChildBirthdayRecord[]> {
+  const { data: friendships, error: friendshipsError } = await supabase
+    .from('friendships')
+    .select('user_id, friend_id, status')
+    .eq('status', 'accepted')
+    .or(`user_id.eq.${childId},friend_id.eq.${childId}`);
+
+  if (friendshipsError) {
+    throw new Error('Impossible de charger les anniversaires de tes amis.');
+  }
+
+  const friendIds = new Set<string>();
+
+  for (const friendship of friendships ?? []) {
+    const userId = typeof friendship.user_id === 'string' ? friendship.user_id : '';
+    const friendId = typeof friendship.friend_id === 'string' ? friendship.friend_id : '';
+
+    if (userId === childId && friendId && friendId !== childId) {
+      friendIds.add(friendId);
+    } else if (friendId === childId && userId && userId !== childId) {
+      friendIds.add(userId);
+    }
+  }
+
+  if (friendIds.size === 0) {
+    return [];
+  }
+
+  let { data: friendProfiles, error: friendProfilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, birthday, birthday_completed, role')
+    .in('id', Array.from(friendIds))
+    .eq('role', 'child');
+
+  if (friendProfilesError && isMissingBirthdayCompletionColumn(friendProfilesError)) {
+    ({ data: friendProfiles, error: friendProfilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, birthday, role')
+      .in('id', Array.from(friendIds))
+      .eq('role', 'child'));
+  }
+
+  if (friendProfilesError) {
+    throw new Error('Impossible de charger les anniversaires de tes amis.');
+  }
+
+  return (friendProfiles ?? []).map(toChildBirthdayRecord);
+}
+
 export async function updateChildBirthday(
   accessToken: string,
   params: UpdateBirthdayParams,
@@ -390,7 +443,7 @@ export async function updateChildBirthday(
     throw new Error('Le consentement parental est obligatoire.');
   }
 
-  const normalizedBirthday = normalizeBirthday(params.birthday);
+  const normalizedBirthday = params.birthday === null ? null : normalizeBirthday(params.birthday);
 
   try {
     const response = await supabase.functions.invoke('update-child-birthday', {
@@ -414,13 +467,21 @@ export async function updateChildBirthday(
       throw new Error('Réponse inattendue du service anniversaire.');
     }
 
-    if (typeof payload.birthday !== 'string' || typeof payload.childId !== 'string') {
+    const childIdValue = typeof payload.childId === 'string' ? payload.childId : null;
+    const birthdayValue =
+      typeof payload.birthday === 'string'
+        ? payload.birthday
+        : payload.birthday === null
+          ? null
+          : undefined;
+
+    if (!childIdValue || birthdayValue === undefined) {
       throw new Error('Réponse inattendue du service anniversaire.');
     }
 
     return {
-      childId: payload.childId,
-      birthday: payload.birthday,
+      childId: childIdValue,
+      birthday: birthdayValue,
     };
   } catch (error) {
     throw new Error(await mapUpdateError(error));

@@ -134,6 +134,50 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
     }
   }
 
+  async function handleClear(childId: string) {
+    setSaving((previous) => ({ ...previous, [childId]: true }));
+    setFeedback((previous) => ({ ...previous, [childId]: null }));
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+
+      const result = await updateChildBirthday(session.access_token, {
+        birthday: null,
+        consent: true,
+        childId,
+      });
+
+      setChildren((previous) =>
+        previous.map((child) =>
+          child.id === childId
+            ? { ...child, birthday: result.birthday, birthdayCompleted: false }
+            : child,
+        ),
+      );
+      setEdits((previous) => ({ ...previous, [childId]: '' }));
+      setFeedback((previous) => ({
+        ...previous,
+        [childId]: { type: 'success', message: "Date d'anniversaire supprimée." },
+      }));
+    } catch (err) {
+      setFeedback((previous) => ({
+        ...previous,
+        [childId]: {
+          type: 'error',
+          message: err instanceof Error ? err.message : "Impossible de supprimer l'anniversaire",
+        },
+      }));
+    } finally {
+      setSaving((previous) => ({ ...previous, [childId]: false }));
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
       <div className="container mx-auto px-4 py-6 md:py-10">
@@ -259,7 +303,7 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
                         </span>
                       </div>
 
-                      <div className="mt-4 grid gap-4 md:grid-cols-[200px_auto_auto] md:items-end">
+                      <div className="mt-4 grid gap-4 md:grid-cols-[200px_auto_auto_auto] md:items-end">
                         <label className="block">
                           <span className="mb-2 block text-sm font-semibold text-gray-700">Date d'anniversaire</span>
                           <input
@@ -282,6 +326,16 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
                         >
                           {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                           Enregistrer
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleClear(child.id)}
+                          disabled={isSaving}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                          Supprimer la date
                         </button>
 
                         {rowFeedback && (
