@@ -41,39 +41,9 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
       shouldRestoreCursor = true;
     }
 
-    const isAndroid = /Android/i.test(window.navigator.userAgent || '');
-    let shouldExitFullscreen = false;
-
-    async function requestFullscreen() {
-      const element = document.documentElement as HTMLElement & {
-        requestFullscreen?: () => Promise<void>;
-      };
-
-      if (!element || !element.requestFullscreen || document.fullscreenElement) {
-        return;
-      }
-
-      try {
-        await element.requestFullscreen();
-        shouldExitFullscreen = true;
-      } catch (error) {
-        console.debug('Unable to enter fullscreen mode:', error);
-      }
-    }
-
-    if (isAndroid && document.fullscreenEnabled && !document.fullscreenElement) {
-      requestFullscreen();
-    }
-
     return () => {
       if (shouldRestoreCursor) {
         document.body.style.cursor = previousCursor;
-      }
-
-      if (shouldExitFullscreen && document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {
-          /* noop */
-        });
       }
     };
   }, []);
