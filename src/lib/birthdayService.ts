@@ -194,23 +194,53 @@ export function computeNextBirthday(
 }
 
 function mapProfileToRecord(profile: any): ChildBirthdayRecord {
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
+  const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
+
   return {
     id: String(profile.id),
     fullName:
       typeof profile.full_name === 'string' && profile.full_name.trim() !== ''
         ? profile.full_name
         : 'Enfant',
-    birthday: typeof profile.birthday === 'string' ? profile.birthday : null,
-    birthdayCompleted: Boolean(profile.birthday_completed),
+    birthday,
+    birthdayCompleted: hasCompletionFlag ? Boolean(profile.birthday_completed) : Boolean(birthday),
   };
 }
 
+function isMissingBirthdayCompletionColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { message?: unknown; details?: unknown }; // Supabase PostgREST error shape
+  const message =
+    (typeof candidate.message === 'string' && candidate.message) ||
+    (typeof candidate.details === 'string' && candidate.details) ||
+    '';
+
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return normalized.includes('birthday_completed') && normalized.includes('does not exist');
+}
+
 export async function fetchChildBirthday(childId: string): Promise<ChildBirthdayRecord> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, birthday, birthday_completed')
     .eq('id', childId)
     .maybeSingle();
+
+  if (error && isMissingBirthdayCompletionColumn(error)) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, birthday')
+      .eq('id', childId)
+      .maybeSingle());
+  }
 
   if (error) {
     throw new Error("Impossible de charger les informations d'anniversaire de cet enfant.");
@@ -224,12 +254,21 @@ export async function fetchChildBirthday(childId: string): Promise<ChildBirthday
 }
 
 export async function fetchParentChildBirthdays(parentId: string): Promise<ChildBirthdayRecord[]> {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
     .select('id, full_name, birthday, birthday_completed')
     .eq('parent_id', parentId)
     .eq('role', 'child')
     .order('full_name', { ascending: true });
+
+  if (error && isMissingBirthdayCompletionColumn(error)) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, birthday')
+      .eq('parent_id', parentId)
+      .eq('role', 'child')
+      .order('full_name', { ascending: true }));
+  }
 
   if (error) {
     throw new Error('Impossible de charger les anniversaires.');
@@ -286,3 +325,7 @@ export async function updateChildBirthday(
     throw new Error(mapUpdateError(error));
   }
 }
+
+// Legacy export compatibility for existing tests
+export const normalizeBirthdayInput = normalizeBirthday;
+export const submitBirthdayUpdate = updateChildBirthday;
