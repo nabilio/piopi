@@ -111,15 +111,65 @@ export async function submitBirthdayUpdate(
   }
 
   if (error) {
-    const candidate = error as { message?: unknown; error?: unknown } | string;
+    const extractMessage = (candidate: unknown): string | null => {
+      if (!candidate) {
+        return null;
+      }
+
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        return trimmed === '' ? null : trimmed;
+      }
+
+      if (typeof candidate === 'object') {
+        const record = candidate as Record<string, unknown>;
+
+        if (typeof record.context === 'object' && record.context !== null) {
+          const contextRecord = record.context as Record<string, unknown>;
+          const contextKeys: Array<'error' | 'message'> = ['error', 'message'];
+          for (const key of contextKeys) {
+            const value = contextRecord[key];
+            if (typeof value === 'string' && value.trim() !== '') {
+              return value.trim();
+            }
+          }
+        }
+
+        const directKeys: Array<'error' | 'message'> = ['error', 'message'];
+        for (const key of directKeys) {
+          const value = record[key];
+          if (typeof value === 'string' && value.trim() !== '') {
+            return value.trim();
+          }
+        }
+
+        if (typeof record.data === 'string') {
+          try {
+            const parsed = JSON.parse(record.data);
+            return extractMessage(parsed);
+          } catch {
+            // Ignore JSON parse errors and continue with other fallbacks
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const rawErrorMessage = extractMessage(error);
+    const sanitizedErrorMessage =
+      rawErrorMessage && rawErrorMessage.toLowerCase().startsWith('edge function returned a non-2xx status code')
+        ? null
+        : rawErrorMessage;
+
     const rawMessage =
-      typeof candidate === 'string' && candidate.trim() !== ''
-        ? candidate
-        : typeof candidate === 'object' && candidate !== null && typeof candidate.message === 'string' && candidate.message.trim() !== ''
-          ? candidate.message
-          : typeof candidate === 'object' && candidate !== null && typeof candidate.error === 'string'
-            ? candidate.error
-            : '';
+      sanitizedErrorMessage ??
+      extractMessage(data) ??
+      rawErrorMessage ??
+      (typeof error === 'object' && error !== null && 'name' in error && typeof (error as { name?: unknown }).name === 'string'
+        ? (error as { name?: string }).name ?? ''
+        : '') ??
+      '';
 
     throw new Error(mapBirthdayUpdateError(rawMessage));
   }
