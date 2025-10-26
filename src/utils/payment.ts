@@ -1,0 +1,136 @@
+import { supabase } from '../lib/supabase';
+
+type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
+
+type CreatePaymentOptions = {
+  planId: PlanId;
+  childrenCount: number;
+  successUrl: string;
+  cancelUrl: string;
+};
+
+type StripeCheckoutResponse = {
+  url: string;
+  sessionId: string;
+  billedChildren: number;
+  amount: number;
+};
+
+type PaypalOrderResponse = {
+  approvalUrl: string;
+  orderId: string;
+  billedChildren: number;
+  amount: number;
+};
+
+type StripeVerificationResponse = {
+  status: string | null;
+  paymentStatus: string | null;
+  amountTotal: number | null;
+  currency: string | null;
+  subscription: string | null;
+};
+
+type PaypalCaptureResponse = {
+  status: string;
+};
+
+async function getAuthHeaders() {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!session?.access_token) {
+    throw new Error('Utilisateur non authentifié');
+  }
+
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  };
+}
+
+function getFunctionUrl(name: string) {
+  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`;
+}
+
+export async function createStripeCheckout(options: CreatePaymentOptions): Promise<StripeCheckoutResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(getFunctionUrl('create-stripe-checkout'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(options),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Impossible de créer la session Stripe');
+  }
+
+  return response.json();
+}
+
+export async function verifyStripeCheckout(sessionId: string): Promise<StripeVerificationResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(getFunctionUrl('verify-stripe-session'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify({ sessionId }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Impossible de vérifier le paiement Stripe');
+  }
+
+  return response.json();
+}
+
+export async function createPaypalOrder(options: CreatePaymentOptions): Promise<PaypalOrderResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(getFunctionUrl('create-paypal-order'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify(options),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Impossible de créer la commande PayPal');
+  }
+
+  return response.json();
+}
+
+export async function capturePaypalOrder(orderId: string): Promise<PaypalCaptureResponse> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(getFunctionUrl('capture-paypal-order'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...headers,
+    },
+    body: JSON.stringify({ orderId }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Impossible de confirmer la commande PayPal');
+  }
+
+  return response.json();
+}
