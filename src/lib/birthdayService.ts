@@ -1,311 +1,331 @@
-import { supabase, Profile, BirthdayInvitation } from './supabase';
+import { supabase } from './supabase';
 
-export type BirthdayResponseStatus = 'accepted' | 'declined';
-
-export type UpcomingBirthday = {
-  child: Profile;
-  formattedDate: string;
-  nextOccurrence: Date;
-  daysUntil: number;
+export type ChildBirthdayRecord = {
+  id: string;
+  fullName: string;
+  birthday: string | null;
+  birthdayCompleted: boolean;
 };
 
-export function normalizeBirthdayInput(value: string): string {
+export type UpdateBirthdayParams = {
+  birthday: string;
+  consent: boolean;
+  childId?: string;
+};
+
+export type UpdateBirthdayResult = {
+  childId: string;
+  birthday: string;
+};
+
+const ISO_BIRTHDAY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function extractErrorMessage(error: unknown): string {
+  if (!error) {
+    return '';
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+
+    if (typeof record.error === 'string') {
+      return record.error;
+    }
+
+    if (typeof record.message === 'string') {
+      return record.message;
+    }
+
+    if (typeof record.data === 'string') {
+      try {
+        const parsed = JSON.parse(record.data);
+        return extractErrorMessage(parsed);
+      } catch {
+        return record.data;
+      }
+    }
+  }
+
+  return '';
+}
+
+function mapUpdateError(error: unknown): string {
+  const rawMessage = extractErrorMessage(error).trim();
+
+  if (!rawMessage) {
+    return "Impossible d'enregistrer l'anniversaire";
+  }
+
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes('consent')) {
+    return 'Le consentement parental est obligatoire.';
+  }
+
+  if (normalized.includes('profile not found') || normalized.includes('child profile not found')) {
+    return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
+  }
+
+  if (normalized.includes('forbidden') || normalized.includes('unauthorized')) {
+    return 'Vous ne pouvez pas modifier cet anniversaire avec votre compte actuel.';
+  }
+
+  if (normalized.includes('service configuration error')) {
+    return "Le service anniversaire est indisponible. Contactez un administrateur.";
+  }
+
+  if (normalized.includes('database migration for birthday tracking is missing')) {
+    return 'La base de données doit être mise à jour avant de pouvoir enregistrer les anniversaires.';
+  }
+
+  if (normalized.includes('row-level security') || normalized.includes('access to the profiles table is blocked')) {
+    return "Accès refusé par la sécurité Supabase. Vérifiez les politiques d'accès.";
+  }
+
+  if (normalized.includes('invalid birthday format') || normalized.includes('birthday is required')) {
+    return "Format de date invalide. Utilisez le format AAAA-MM-JJ.";
+  }
+
+  if (normalized.includes('childid is required')) {
+    return "Veuillez sélectionner l'enfant à mettre à jour.";
+  }
+
+  if (normalized.includes('function invocation') || normalized.includes('edge function returned')) {
+    return "Impossible d'enregistrer l'anniversaire pour le moment. Réessayez plus tard.";
+  }
+
+  return rawMessage;
+}
+
+function ensureValidDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
+  );
+}
+
+export function normalizeBirthday(value: string): string {
   if (!value) {
-    throw new Error('La date d\'anniversaire est requise');
+    throw new Error("La date d'anniversaire est requise");
   }
 
-  const sanitized = value.trim();
-  const isoMatch = sanitized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!isoMatch) {
-    throw new Error('Format de date invalide (aaaa-mm-jj attendu)');
+  const trimmed = value.trim();
+  const match = trimmed.match(ISO_BIRTHDAY_REGEX);
+
+  if (!match) {
+    throw new Error('Format de date invalide (AAAA-MM-JJ attendu)');
   }
 
-  const year = Number(isoMatch[1]);
-  const month = Number(isoMatch[2]);
-  const day = Number(isoMatch[3]);
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
 
-  if (Number.isNaN(utcDate.getTime())) {
-    throw new Error('Date d\'anniversaire invalide');
-  }
-
-  if (
-    utcDate.getUTCFullYear() !== year ||
-    utcDate.getUTCMonth() + 1 !== month ||
-    utcDate.getUTCDate() !== day
-  ) {
-    throw new Error('Date d\'anniversaire invalide');
+  if (!ensureValidDate(year, month, day)) {
+    throw new Error("Date d'anniversaire invalide");
   }
 
   const paddedMonth = month.toString().padStart(2, '0');
   const paddedDay = day.toString().padStart(2, '0');
+
   return `${year}-${paddedMonth}-${paddedDay}`;
 }
 
-function mapBirthdayUpdateError(message: string): string {
-  const fallbackMessage = 'Impossible d\'enregistrer l\'anniversaire';
-
-  if (!message) {
-    return fallbackMessage;
+export function formatBirthday(dateString: string | null, locale: string = 'fr-FR'): string | null {
+  if (!dateString) {
+    return null;
   }
 
-  const trimmedMessage = message.trim();
-  if (!trimmedMessage) {
-    return fallbackMessage;
+  try {
+    const normalized = normalizeBirthday(dateString);
+    const [, month, day] = normalized.split('-');
+    const formatter = new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'long' });
+    return formatter.format(new Date(Date.UTC(2000, Number(month) - 1, Number(day))));
+  } catch {
+    return null;
   }
-
-  const normalized = trimmedMessage.toLowerCase();
-  const genericSupabaseFailures = [
-    'function invocation http error',
-    'function http error',
-    'fonction http error',
-  ];
-
-  if (genericSupabaseFailures.some((needle) => normalized.includes(needle))) {
-    return fallbackMessage;
-  }
-
-  if (trimmedMessage === 'Parental consent is required') {
-    return 'Le consentement parental est obligatoire.';
-  }
-
-  if (trimmedMessage === 'Child profile not found' || trimmedMessage === 'Profile not found') {
-    return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
-  }
-
-  if (trimmedMessage === 'Supabase service is not configured correctly') {
-    return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
-  }
-
-  if (trimmedMessage.includes('Database migration for birthday tracking is missing')) {
-    return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
-  }
-
-  if (trimmedMessage.includes('Access to the profiles table is blocked by RLS policies')) {
-    return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
-  }
-
-  if (trimmedMessage.includes('Invalid birthday format') || trimmedMessage.includes('Birthday is required')) {
-    return 'La date d\'anniversaire fournie est invalide.';
-  }
-
-  return trimmedMessage;
 }
 
-export async function submitBirthdayUpdate(
-  accessToken: string,
-  {
-    birthday,
-    consent,
-    childId,
-  }: {
-    birthday: string;
-    consent: boolean;
-    childId?: string;
-  },
-): Promise<{ childId: string; birthday: string }> {
-  const normalized = normalizeBirthdayInput(birthday);
+export function computeNextBirthday(
+  birthday: string | null,
+  referenceDate: Date = new Date(),
+): { date: Date; daysUntil: number } | null {
+  if (!birthday) {
+    return null;
+  }
 
-  let data: unknown = null;
-  let error: unknown = null;
+  let normalized: string;
+  try {
+    normalized = normalizeBirthday(birthday);
+  } catch {
+    return null;
+  }
+
+  const [, monthString, dayString] = normalized.split('-');
+  const month = Number(monthString);
+  const day = Number(dayString);
+
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  let next = new Date(referenceDate.getFullYear(), month - 1, day);
+
+  if (Number.isNaN(next.getTime())) {
+    return null;
+  }
+
+  if (next < today) {
+    next = new Date(referenceDate.getFullYear() + 1, month - 1, day);
+  }
+
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+  const diff = next.getTime() - today.getTime();
+  const daysUntil = Math.round(diff / millisecondsPerDay);
+
+  return { date: next, daysUntil };
+}
+
+function mapProfileToRecord(profile: any): ChildBirthdayRecord {
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
+  const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
+
+  return {
+    id: String(profile.id),
+    fullName:
+      typeof profile.full_name === 'string' && profile.full_name.trim() !== ''
+        ? profile.full_name
+        : 'Enfant',
+    birthday,
+    birthdayCompleted: hasCompletionFlag ? Boolean(profile.birthday_completed) : Boolean(birthday),
+  };
+}
+
+function isMissingBirthdayCompletionColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { message?: unknown; details?: unknown }; // Supabase PostgREST error shape
+  const message =
+    (typeof candidate.message === 'string' && candidate.message) ||
+    (typeof candidate.details === 'string' && candidate.details) ||
+    '';
+
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return normalized.includes('birthday_completed') && normalized.includes('does not exist');
+}
+
+export async function fetchChildBirthday(childId: string): Promise<ChildBirthdayRecord> {
+  let { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, birthday, birthday_completed')
+    .eq('id', childId)
+    .maybeSingle();
+
+  if (error && isMissingBirthdayCompletionColumn(error)) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, birthday')
+      .eq('id', childId)
+      .maybeSingle());
+  }
+
+  if (error) {
+    throw new Error("Impossible de charger les informations d'anniversaire de cet enfant.");
+  }
+
+  if (!data) {
+    throw new Error('Profil enfant introuvable.');
+  }
+
+  return mapProfileToRecord(data);
+}
+
+export async function fetchParentChildBirthdays(parentId: string): Promise<ChildBirthdayRecord[]> {
+  let { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, birthday, birthday_completed')
+    .eq('parent_id', parentId)
+    .eq('role', 'child')
+    .order('full_name', { ascending: true });
+
+  if (error && isMissingBirthdayCompletionColumn(error)) {
+    ({ data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, birthday')
+      .eq('parent_id', parentId)
+      .eq('role', 'child')
+      .order('full_name', { ascending: true }));
+  }
+
+  if (error) {
+    throw new Error('Impossible de charger les anniversaires.');
+  }
+
+  return (data ?? []).map(mapProfileToRecord);
+}
+
+export async function updateChildBirthday(
+  accessToken: string,
+  params: UpdateBirthdayParams,
+): Promise<UpdateBirthdayResult> {
+  if (!accessToken) {
+    throw new Error('Session expirée. Veuillez vous reconnecter.');
+  }
+
+  if (!params.consent) {
+    throw new Error('Le consentement parental est obligatoire.');
+  }
+
+  const normalizedBirthday = normalizeBirthday(params.birthday);
 
   try {
     const response = await supabase.functions.invoke('update-child-birthday', {
       body: {
-        birthday: normalized,
-        consent,
-        childId,
+        birthday: normalizedBirthday,
+        consent: params.consent,
+        childId: params.childId,
       },
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
 
-    data = response.data;
-    error = response.error;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    throw new Error(mapBirthdayUpdateError(message));
-  }
+    if (response.error) {
+      throw response.error;
+    }
 
-  if (error) {
-    const extractMessage = (candidate: unknown): string | null => {
-      if (!candidate) {
-        return null;
-      }
+    const payload = response.data as { birthday?: unknown; childId?: unknown };
 
-      if (typeof candidate === 'string') {
-        const trimmed = candidate.trim();
-        return trimmed === '' ? null : trimmed;
-      }
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Réponse inattendue du service anniversaire.');
+    }
 
-      if (typeof candidate === 'object') {
-        const record = candidate as Record<string, unknown>;
+    if (typeof payload.birthday !== 'string' || typeof payload.childId !== 'string') {
+      throw new Error('Réponse inattendue du service anniversaire.');
+    }
 
-        if (typeof record.context === 'object' && record.context !== null) {
-          const contextRecord = record.context as Record<string, unknown>;
-          const contextKeys: Array<'error' | 'message'> = ['error', 'message'];
-          for (const key of contextKeys) {
-            const value = contextRecord[key];
-            if (typeof value === 'string' && value.trim() !== '') {
-              return value.trim();
-            }
-          }
-        }
-
-        const directKeys: Array<'error' | 'message'> = ['error', 'message'];
-        for (const key of directKeys) {
-          const value = record[key];
-          if (typeof value === 'string' && value.trim() !== '') {
-            return value.trim();
-          }
-        }
-
-        if (typeof record.data === 'string') {
-          try {
-            const parsed = JSON.parse(record.data);
-            return extractMessage(parsed);
-          } catch {
-            // Ignore JSON parse errors and continue with other fallbacks
-          }
-        }
-      }
-
-      return null;
+    return {
+      childId: payload.childId,
+      birthday: payload.birthday,
     };
-
-    const rawErrorMessage = extractMessage(error);
-    const sanitizedErrorMessage =
-      rawErrorMessage && rawErrorMessage.toLowerCase().startsWith('edge function returned a non-2xx status code')
-        ? null
-        : rawErrorMessage;
-
-    const messageCandidates: Array<string | null> = [
-      sanitizedErrorMessage,
-      extractMessage(data),
-      typeof error === 'object' && error !== null && 'name' in error && typeof (error as { name?: unknown }).name === 'string'
-        ? ((error as { name?: string }).name ?? '').trim() || null
-        : null,
-    ];
-
-    const finalMessage = messageCandidates.find((candidate) => candidate && candidate.trim() !== '') ?? '';
-
-    throw new Error(mapBirthdayUpdateError(finalMessage));
-  }
-
-  if (!data || typeof data !== 'object') {
-    throw new Error('Réponse invalide du service anniversaire.');
-  }
-
-  const payload = data as { childId?: unknown; birthday?: unknown };
-
-  if (typeof payload.childId !== 'string' || typeof payload.birthday !== 'string') {
-    throw new Error('Réponse invalide du service anniversaire.');
-  }
-
-  return {
-    childId: payload.childId,
-    birthday: payload.birthday,
-  };
-}
-
-export async function fetchParentChildrenWithBirthdays(parentId: string): Promise<Profile[]> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('parent_id', parentId)
-    .eq('role', 'child')
-    .order('full_name');
-
-  if (error) {
-    throw error;
-  }
-
-  return data ?? [];
-}
-
-export async function fetchBirthdayInvitations(childIds: string[]): Promise<BirthdayInvitation[]> {
-  if (childIds.length === 0) {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from('birthday_party_invitations')
-    .select(`
-      id,
-      child_id,
-      host_child_id,
-      event_date,
-      location,
-      message,
-      status,
-      responded_at,
-      created_at,
-      host_child_profile:host_child_id ( id, full_name ),
-      child_profile:child_id ( id, full_name )
-    `)
-    .in('child_id', childIds)
-    .order('event_date', { ascending: true });
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []).map((invitation: any) => ({
-    ...invitation,
-    host_child_profile: invitation.host_child_profile ?? null,
-    child_profile: invitation.child_profile ?? null,
-  }));
-}
-
-export async function respondToBirthdayInvitation(
-  invitationId: string,
-  status: BirthdayResponseStatus,
-): Promise<void> {
-  const { error } = await supabase
-    .from('birthday_party_invitations')
-    .update({
-      status,
-      responded_at: new Date().toISOString(),
-    })
-    .eq('id', invitationId);
-
-  if (error) {
-    throw error;
+  } catch (error) {
+    throw new Error(mapUpdateError(error));
   }
 }
 
-export function computeUpcomingBirthdays(children: Profile[]): UpcomingBirthday[] {
-  const today = new Date();
-
-  return children
-    .filter((child) => child.birthday)
-    .map((child) => {
-      const [, month, day] = (child.birthday as string).split('-').map(Number);
-      const currentYear = today.getFullYear();
-      let next = new Date(currentYear, (month ?? 1) - 1, day ?? 1);
-
-      if (Number.isNaN(next.getTime())) {
-        return null;
-      }
-
-      if (next < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-        next = new Date(currentYear + 1, (month ?? 1) - 1, day ?? 1);
-      }
-
-      const diffTime = next.getTime() - today.getTime();
-      const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      return {
-        child,
-        nextOccurrence: next,
-        daysUntil,
-        formattedDate: next.toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: 'long',
-        }),
-      } satisfies UpcomingBirthday;
-    })
-    .filter((item): item is UpcomingBirthday => item !== null)
-    .sort((a, b) => a.daysUntil - b.daysUntil);
-}
+// Legacy export compatibility for existing tests
+export const normalizeBirthdayInput = normalizeBirthday;
+export const submitBirthdayUpdate = updateChildBirthday;
