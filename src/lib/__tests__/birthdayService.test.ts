@@ -109,4 +109,21 @@ describe('submitBirthdayUpdate', () => {
       }),
     ).rejects.toThrow("Impossible d'enregistrer l'anniversaire");
   });
+
+  it("ignore les erreurs HTTP génériques de la fonction", async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: null,
+      error: { message: 'Function invocation failed: Function invocation HTTP error' },
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow("Impossible d'enregistrer l'anniversaire");
+  });
 });

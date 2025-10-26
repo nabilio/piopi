@@ -43,35 +43,53 @@ export function normalizeBirthdayInput(value: string): string {
 }
 
 function mapBirthdayUpdateError(message: string): string {
+  const fallbackMessage = 'Impossible d\'enregistrer l\'anniversaire';
+
   if (!message) {
-    return 'Impossible d\'enregistrer l\'anniversaire';
+    return fallbackMessage;
   }
 
-  if (message === 'Parental consent is required') {
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) {
+    return fallbackMessage;
+  }
+
+  const normalized = trimmedMessage.toLowerCase();
+  const genericSupabaseFailures = [
+    'function invocation http error',
+    'function http error',
+    'fonction http error',
+  ];
+
+  if (genericSupabaseFailures.some((needle) => normalized.includes(needle))) {
+    return fallbackMessage;
+  }
+
+  if (trimmedMessage === 'Parental consent is required') {
     return 'Le consentement parental est obligatoire.';
   }
 
-  if (message === 'Child profile not found' || message === 'Profile not found') {
+  if (trimmedMessage === 'Child profile not found' || trimmedMessage === 'Profile not found') {
     return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
   }
 
-  if (message === 'Supabase service is not configured correctly') {
+  if (trimmedMessage === 'Supabase service is not configured correctly') {
     return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
   }
 
-  if (message.includes('Database migration for birthday tracking is missing')) {
+  if (trimmedMessage.includes('Database migration for birthday tracking is missing')) {
     return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
   }
 
-  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+  if (trimmedMessage.includes('Access to the profiles table is blocked by RLS policies')) {
     return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
   }
 
-  if (message.includes('Invalid birthday format') || message.includes('Birthday is required')) {
+  if (trimmedMessage.includes('Invalid birthday format') || trimmedMessage.includes('Birthday is required')) {
     return 'La date d\'anniversaire fournie est invalide.';
   }
 
-  return message;
+  return trimmedMessage;
 }
 
 export async function submitBirthdayUpdate(
