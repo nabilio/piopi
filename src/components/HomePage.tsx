@@ -4,7 +4,6 @@ import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useGamification } from '../hooks/useGamification';
-import { useBirthdayCompletion } from '../hooks/useBirthdayCompletion';
 import { AvatarDisplay } from './AvatarDisplay';
 import { BattleSetup } from './BattleSetup';
 import { BattleHub } from './BattleHub';
@@ -12,7 +11,6 @@ import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
 import { BirthdayNotificationCard } from './BirthdayNotificationCard';
-import { ChildBirthdayModal } from './ChildBirthdayModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -24,6 +22,7 @@ type HomePageProps = {
   onBattleCreated?: (battleId: string) => void;
   onStoriesClick?: () => void;
   onNetworkClick?: () => void;
+  onBirthdaysClick?: (childId: string | null) => void;
 };
 
 type ExperienceButtonProps = {
@@ -98,11 +97,10 @@ function ExperienceButton({
   );
 }
 
-export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {} }: HomePageProps) {
+export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvatarClick, onBattleClick, onCoursesClick = () => {}, onBattleCreated, onStoriesClick = () => {}, onNetworkClick = () => {}, onBirthdaysClick }: HomePageProps) {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const { profile, user, refreshProfile } = useAuth();
   const { totalPoints } = useGamification();
-  const birthdayCompletion = useBirthdayCompletion(profile, refreshProfile);
   const [children, setChildren] = useState<Profile[]>([]);
   const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
@@ -1010,9 +1008,9 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
                 }
                 className="min-h-[260px]"
               />
-              {birthdayCompletion.shouldPrompt ? (
+              {currentChildId ? (
                 <BirthdayNotificationCard
-                  onAction={birthdayCompletion.openModal}
+                  onAction={() => onBirthdaysClick?.(currentChildId)}
                   className="min-h-[260px]"
                 />
               ) : null}
@@ -1027,18 +1025,6 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
       </div>
-
-      <ChildBirthdayModal
-        isOpen={birthdayCompletion.isModalOpen}
-        onClose={birthdayCompletion.closeModal}
-        onSubmit={birthdayCompletion.submitBirthday}
-        loading={birthdayCompletion.loading}
-        error={birthdayCompletion.error}
-        successMessage={birthdayCompletion.successMessage}
-        onResetFeedback={birthdayCompletion.resetFeedback}
-        defaultBirthday={profile?.birthday ?? null}
-      />
-
     </div>
   );
 }

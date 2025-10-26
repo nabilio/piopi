@@ -1,48 +1,23 @@
-import { useState } from 'react';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import { cleanup, render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { ChildBirthdayModal } from '../components/ChildBirthdayModal';
-import { BirthdayNotificationCard } from '../components/BirthdayNotificationCard';
-import { useBirthdayCompletion } from '../hooks/useBirthdayCompletion';
-import { supabase, Profile } from '../lib/supabase';
+import { ChildBirthdaysPage } from '../components/ChildBirthdaysPage';
 import { ParentBirthdays } from '../components/ParentBirthdays';
+import { supabase, Profile } from '../lib/supabase';
 import * as birthdayService from '../lib/birthdayService';
 
-type HarnessProps = {
-  initialProfile: Profile;
-};
+let childBirthdayLoader: ((birthday: string | null) => void) | null = null;
 
-function ChildBirthdayFlowHarness({ initialProfile }: HarnessProps) {
-  const [profile, setProfile] = useState<Profile>(initialProfile);
-  const birthdayCompletion = useBirthdayCompletion(profile, async () => {
-    setProfile((previous) => ({
-      ...previous,
-      birthday_completed: true,
-      birthday: '2014-03-18',
-    }));
-  });
+vi.mock('../components/BirthdayCard', () => ({
+  __esModule: true,
+  BirthdayCard: (props: any) => {
+    childBirthdayLoader = props.onChildBirthdayLoaded ?? null;
+    return <div data-testid="birthday-card" />;
+  },
+}));
 
-  return (
-    <div>
-      {birthdayCompletion.shouldPrompt && (
-        <BirthdayNotificationCard onAction={birthdayCompletion.openModal} />
-      )}
-      <ChildBirthdayModal
-        isOpen={birthdayCompletion.isModalOpen}
-        onClose={birthdayCompletion.closeModal}
-        onSubmit={birthdayCompletion.submitBirthday}
-        loading={birthdayCompletion.loading}
-        error={birthdayCompletion.error}
-        successMessage={birthdayCompletion.successMessage}
-        onResetFeedback={birthdayCompletion.resetFeedback}
-        defaultBirthday={profile.birthday ?? null}
-      />
-    </div>
-  );
-}
-
-describe('Flux anniversaire enfant/parent', () => {
+describe('Gestion des anniversaires', () => {
   const childProfile: Profile = {
     id: 'child-1',
     email: 'child@example.com',
@@ -54,93 +29,82 @@ describe('Flux anniversaire enfant/parent', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-03-10T00:00:00.000Z'));
     vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
     vi.spyOn(supabase.auth, 'getSession').mockResolvedValue({
-      data: { session: { access_token: 'token' } },
+      data: { session: { access_token: 'token' } as any },
       error: null,
     });
-    vi.spyOn(birthdayService, 'submitBirthdayUpdate').mockResolvedValue({
-      childId: 'child-1',
-      birthday: '2014-03-18',
-    });
+    vi.spyOn(birthdayService, 'fetchParentChildrenWithBirthdays').mockResolvedValue([]);
+    vi.spyOn(birthdayService, 'fetchBirthdayInvitations').mockResolvedValue([]);
+    childBirthdayLoader = null;
   });
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
+    childBirthdayLoader = null;
   });
 
-  it("permet à l'enfant de saisir sa date puis au parent de gérer l'invitation", async () => {
-    const user = userEvent.setup();
+  it('affiche les messages adaptés sur la page anniversaire enfant', () => {
+    render(<ChildBirthdaysPage childId="child-1" onBack={() => {}} />);
 
-    const { unmount } = render(<ChildBirthdayFlowHarness initialProfile={childProfile} />);
+    expect(screen.getByText(/Nous préparons ta surprise/i)).toBeInTheDocument();
 
-    expect(
-      screen.getByText('Anniversaire'),
-    ).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole('button', { name: /Ajouter ma date/i }),
-    );
-
-    const dateInput = await screen.findByLabelText("Date d'anniversaire");
-    await user.clear(dateInput);
-    await user.type(dateInput, '2014-03-18');
-
-    const consentCheckbox = screen.getByLabelText(/Je confirme/i);
-    await user.click(consentCheckbox);
-
-    await user.click(screen.getByRole('button', { name: /Valider avec mon parent/i }));
-
-    await waitFor(() => expect(birthdayService.submitBirthdayUpdate).toHaveBeenCalled());
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText('Anniversaire'),
-      ).not.toBeInTheDocument();
+    act(() => {
+      childBirthdayLoader?.(null);
     });
 
-    unmount();
+    expect(
+      screen.getByText(/Invite ton parent à ajouter ta date d'anniversaire/i),
+    ).toBeInTheDocument();
 
-    const parentChildren = [
+    act(() => {
+      childBirthdayLoader?.('2014-03-18');
+    });
+
+    expect(
+      screen.getByText(/Ton jour d'anniversaire est le 18\/03\/2014 \(dans 8 jours\)/i),
+    ).toBeInTheDocument();
+  });
+
+  it("permet au parent d'enregistrer la date d'anniversaire de son enfant", async () => {
+    const user = userEvent.setup();
+
+    const parentChildren: Profile[] = [
       {
         ...childProfile,
-        birthday: '2014-03-18',
-        birthday_completed: true,
-      },
-    ];
-
-    const parentInvitations = [
-      {
-        id: 'invite-1',
-        child_id: 'child-1',
-        host_child_id: 'child-2',
-        event_date: '2025-05-01',
-        location: 'Maison des Lunes',
-        message: 'Pique-nique magique au parc des hiboux !',
-        status: 'pending' as const,
-        responded_at: null,
-        created_at: new Date().toISOString(),
-        host_child_profile: { id: 'child-2', full_name: 'Léo' },
-        child_profile: { id: 'child-1', full_name: 'Alice' },
       },
     ];
 
     vi.spyOn(birthdayService, 'fetchParentChildrenWithBirthdays').mockResolvedValue(parentChildren);
-    vi.spyOn(birthdayService, 'fetchBirthdayInvitations').mockResolvedValue(parentInvitations);
-    const respondSpy = vi
-      .spyOn(birthdayService, 'respondToBirthdayInvitation')
-      .mockResolvedValue();
+    const submitSpy = vi
+      .spyOn(birthdayService, 'submitBirthdayUpdate')
+      .mockResolvedValue({ childId: 'child-1', birthday: '2014-03-18' });
 
     render(<ParentBirthdays onBack={() => {}} parentId="parent-1" />);
 
-    expect(await screen.findByText('Gestion des anniversaires')).toBeInTheDocument();
     expect(await screen.findByText('Alice')).toBeInTheDocument();
-    expect(await screen.findByText(/invite à son anniversaire/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Confirmer/i }));
+    const dateInput = await screen.findByLabelText("Date d'anniversaire pour Alice");
+    await user.clear(dateInput);
+    await user.type(dateInput, '2014-03-18');
 
-    await waitFor(() => expect(respondSpy).toHaveBeenCalledWith('invite-1', 'accepted'));
+    await user.click(screen.getByRole('button', { name: /Enregistrer/i }));
+
+    await waitFor(() =>
+      expect(submitSpy).toHaveBeenCalledWith('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Date d'anniversaire enregistrée avec succès/i),
+    ).toBeInTheDocument();
   });
 });

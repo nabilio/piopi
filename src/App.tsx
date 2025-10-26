@@ -12,6 +12,7 @@ import { ParentDashboard } from './components/ParentDashboard';
 import { ParentBirthdays } from './components/ParentBirthdays';
 import { AuthModal } from './components/AuthModal';
 import { AvatarCustomizer } from './components/AvatarCustomizer';
+import { ChildBirthdaysPage } from './components/ChildBirthdaysPage';
 import { AchievementNotification } from './components/AchievementNotification';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { Onboarding } from './components/Onboarding';
@@ -55,7 +56,7 @@ import { useGamification } from './hooks/useGamification';
 import { Subject, Activity } from './lib/supabase';
 import { supabase } from './lib/supabase';
 
-type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
+type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
 function UpgradePlanView({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const { user } = useAuth();
@@ -133,6 +134,7 @@ function AppContent() {
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [subscriptionRefreshTrigger, setSubscriptionRefreshTrigger] = useState(0);
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
+  const [childBirthdaysChildId, setChildBirthdaysChildId] = useState<string | null>(null);
   const [showEmailConfirmed, setShowEmailConfirmed] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'security' | 'notifications' | 'subscription' | 'children'>('profile');
 
@@ -434,6 +436,13 @@ function AppContent() {
             setView('battle-waiting');
           }}
           onNetworkClick={() => handleNavigationAttempt('network')}
+          onBirthdaysClick={(childId) => {
+            if (!childId) {
+              return;
+            }
+            setChildBirthdaysChildId(childId);
+            setView('child-birthdays');
+          }}
         />
       )}
 
@@ -565,6 +574,17 @@ function AppContent() {
       )}
 
       {view === 'coach' && <CoachDevoirs onBack={handleBack} />}
+
+      {view === 'child-birthdays' && childBirthdaysChildId && (
+        <ChildBirthdaysPage
+          childId={childBirthdaysChildId}
+          onBack={() => {
+            setChildBirthdaysChildId(null);
+            setView('home');
+          }}
+          onManageFriends={() => handleNavigationAttempt('network')}
+        />
+      )}
 
       {view === 'parent-birthdays' && profile?.role === 'parent' && user && (
         <ParentBirthdays

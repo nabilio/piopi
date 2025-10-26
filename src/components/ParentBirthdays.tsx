@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CalendarDays, Loader2, PartyPopper, MapPin, Clock, CheckCircle2, XCircle, Filter, Sparkles } from 'lucide-react';
-import { Profile, BirthdayInvitation } from '../lib/supabase';
+import { supabase, Profile, BirthdayInvitation } from '../lib/supabase';
 import {
   computeUpcomingBirthdays,
   fetchBirthdayInvitations,
   fetchParentChildrenWithBirthdays,
   respondToBirthdayInvitation,
   BirthdayResponseStatus,
+  normalizeBirthdayInput,
+  submitBirthdayUpdate,
 } from '../lib/birthdayService';
+import { formatBirthdayLong, getNextBirthday } from '../utils/birthday';
 
 const FILTERS = [
   { value: 'pending', label: 'En attente' },
@@ -31,6 +34,8 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<InvitationFilter>('pending');
   const [refreshing, setRefreshing] = useState(false);
+  const [birthdayEdits, setBirthdayEdits] = useState<Record<string, string>>({});
+  const [savingChildId, setSavingChildId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -46,12 +51,73 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
     return invitations.filter((invitation) => invitation.status === filter);
   }, [filter, invitations]);
 
+  function handleBirthdayInputChange(childId: string, value: string) {
+    setBirthdayEdits((previous) => ({
+      ...previous,
+      [childId]: value,
+    }));
+    setError(null);
+    setActionMessage(null);
+  }
+
+  async function handleSaveChildBirthday(childId: string) {
+    const value = birthdayEdits[childId] ?? '';
+
+    if (!value) {
+      setError('Veuillez sélectionner une date d\'anniversaire.');
+      return;
+    }
+
+    setSavingChildId(childId);
+    setError(null);
+    setActionMessage(null);
+
+    try {
+      const normalized = normalizeBirthdayInput(value);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+
+      const result = await submitBirthdayUpdate(session.access_token, {
+        birthday: normalized,
+        consent: true,
+        childId,
+      });
+
+      setChildren((previous) =>
+        previous.map((child) =>
+          child.id === childId
+            ? { ...child, birthday: result.birthday, birthday_completed: true }
+            : child,
+        ),
+      );
+      setBirthdayEdits((previous) => ({
+        ...previous,
+        [childId]: result.birthday,
+      }));
+      setActionMessage('Date d\'anniversaire enregistrée avec succès.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible d\'enregistrer l\'anniversaire';
+      setError(message);
+    } finally {
+      setSavingChildId(null);
+    }
+  }
+
   async function loadData() {
     setLoading(true);
     setError(null);
     try {
       const childProfiles = await fetchParentChildrenWithBirthdays(parentId);
       setChildren(childProfiles);
+      setBirthdayEdits(
+        childProfiles.reduce<Record<string, string>>((acc, child) => {
+          acc[child.id] = child.birthday ?? '';
+          return acc;
+        }, {}),
+      );
 
       if (childProfiles.length > 0) {
         const invites = await fetchBirthdayInvitations(childProfiles.map((child) => child.id));
@@ -172,14 +238,96 @@ export function ParentBirthdays({ onBack, parentId }: ParentBirthdaysProps) {
         {actionMessage && (
           <div className="mb-6 rounded-3xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
             {actionMessage}
+        </div>
+      )}
+
+      <section className="mb-10 rounded-3xl bg-white p-6 shadow-lg">
+        <div className="mb-4 flex items-center gap-2">
+          <PartyPopper className="h-5 w-5 text-purple-500" />
+          <h2 className="text-lg font-bold text-gray-900">Dates d'anniversaire des enfants</h2>
+        </div>
+        <p className="mb-6 text-sm text-gray-600">
+          Ajoutez ou mettez à jour la date d'anniversaire de vos enfants pour débloquer les surprises sur leur espace.
+        </p>
+
+        {children.length === 0 ? (
+          <p className="rounded-2xl bg-purple-50 p-5 text-sm text-purple-700">
+            Aucun enfant n'est encore rattaché à votre compte.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {children.map((child) => {
+              const currentValue = birthdayEdits[child.id] ?? '';
+              const hasChanged = currentValue !== (child.birthday ?? '');
+              const isSaving = savingChildId === child.id;
+              const nextBirthday = child.birthday ? getNextBirthday(child.birthday) : null;
+              const formattedBirthday = formatBirthdayLong(child.birthday ?? null);
+
+              let helperText = 'Aucune date enregistrée pour le moment.';
+              if (formattedBirthday) {
+                if (nextBirthday) {
+                  if (nextBirthday.daysUntil === 0) {
+                    helperText = `Anniversaire aujourd'hui ! (${formattedBirthday})`;
+                  } else if (nextBirthday.daysUntil === 1) {
+                    helperText = `Prochaine fête demain (${formattedBirthday})`;
+                  } else {
+                    helperText = `Prochaine fête dans ${nextBirthday.daysUntil} jours (${formattedBirthday})`;
+                  }
+                } else {
+                  helperText = `Anniversaire enregistré : ${formattedBirthday}`;
+                }
+              }
+
+              return (
+                <div
+                  key={child.id}
+                  className="rounded-2xl border border-purple-100 bg-gradient-to-br from-white to-purple-50 p-5 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">Enfant</p>
+                      <h3 className="text-lg font-bold text-gray-900">{child.full_name}</h3>
+                      <p className="mt-1 text-sm text-gray-600">{helperText}</p>
+                    </div>
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-end">
+                      <div className="flex w-full flex-col gap-2 sm:w-56">
+                        <label
+                          htmlFor={`birthday-${child.id}`}
+                          className="text-xs font-semibold uppercase tracking-wide text-purple-600"
+                        >
+                          Date d'anniversaire pour {child.full_name}
+                        </label>
+                        <input
+                          id={`birthday-${child.id}`}
+                          type="date"
+                          value={currentValue}
+                          onChange={(event) => handleBirthdayInputChange(child.id, event.target.value)}
+                          className="rounded-xl border border-purple-200 px-3 py-2 text-gray-700 shadow-sm focus:border-purple-400 focus:outline-none focus:ring focus:ring-purple-100"
+                          max="2099-12-31"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveChildBirthday(child.id)}
+                        disabled={!currentValue || isSaving || !hasChanged}
+                        className="inline-flex items-center justify-center rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
+      </section>
 
-        <section className="mb-10 rounded-3xl bg-white p-6 shadow-lg">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-              <CalendarDays className="h-5 w-5 text-purple-500" />
-              Prochains anniversaires
+      <section className="mb-10 rounded-3xl bg-white p-6 shadow-lg">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+            <CalendarDays className="h-5 w-5 text-purple-500" />
+            Prochains anniversaires
             </h2>
             <button
               type="button"
