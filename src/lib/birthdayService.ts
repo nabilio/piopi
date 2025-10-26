@@ -43,8 +43,8 @@ export function normalizeBirthdayInput(value: string): string {
 }
 
 function mapBirthdayUpdateError(message: string): string {
-  if (!message) {
-    return 'Impossible d\'enregistrer l\'anniversaire';
+  if (!message || message === 'Unexpected error') {
+    return 'Impossible d\'enregistrer l\'anniversaire pour le moment. Merci de réessayer ultérieurement ou de contacter un administrateur.';
   }
 
   if (message === 'Parental consent is required') {
@@ -57,6 +57,26 @@ function mapBirthdayUpdateError(message: string): string {
 
   if (message === 'Supabase service is not configured correctly') {
     return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
+  }
+
+  if (message === 'Unauthorized') {
+    return 'Votre session a expiré. Veuillez vous reconnecter puis réessayer.';
+  }
+
+  if (message === 'Forbidden') {
+    return 'Vous n\'avez pas les permissions nécessaires pour mettre à jour cet anniversaire.';
+  }
+
+  if (message === 'childId is required for parent accounts') {
+    return 'Merci de sélectionner l\'enfant concerné avant de valider.';
+  }
+
+  if (message === 'Cannot update another child profile') {
+    return 'Vous ne pouvez pas modifier l\'anniversaire d\'un autre enfant.';
+  }
+
+  if (message === 'Unsupported role') {
+    return 'Ce type de profil ne peut pas encore modifier une date d\'anniversaire.';
   }
 
   if (message.includes('Database migration for birthday tracking is missing')) {
@@ -72,6 +92,28 @@ function mapBirthdayUpdateError(message: string): string {
   }
 
   return message;
+}
+
+function extractErrorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  const candidates: unknown[] = [
+    (payload as { error?: unknown }).error,
+    (payload as { message?: unknown }).message,
+    (payload as { details?: unknown }).details,
+    (payload as { hint?: unknown }).hint,
+    (payload as { code?: unknown }).code,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() !== '') {
+      return candidate.trim();
+    }
+  }
+
+  return '';
 }
 
 export async function submitBirthdayUpdate(
@@ -101,10 +143,16 @@ export async function submitBirthdayUpdate(
     }),
   });
 
-  const payload = await response.json();
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch (parseError) {
+    console.error('Failed to parse birthday update response:', parseError);
+  }
 
   if (!response.ok) {
-    const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
+    const rawMessage = extractErrorMessage(payload);
     throw new Error(mapBirthdayUpdateError(rawMessage));
   }
 
