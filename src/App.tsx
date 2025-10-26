@@ -56,6 +56,7 @@ import { useGamification } from './hooks/useGamification';
 import { Subject, Activity } from './lib/supabase';
 import { supabase } from './lib/supabase';
 import { useAutoFullscreen } from './hooks/useAutoFullscreen';
+import { ChildQRLoginPage } from './components/ChildQRLoginPage';
 
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
@@ -197,6 +198,10 @@ function AppContent() {
   // DEBUG: Show test query page
   if (window.location.search.includes('test-quiz-query')) {
     return <TestQuizQuery />;
+  }
+
+  if (window.location.pathname === '/child-qr-login') {
+    return <ChildQRLoginPage />;
   }
 
 
