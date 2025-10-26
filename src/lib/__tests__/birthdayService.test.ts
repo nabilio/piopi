@@ -92,4 +92,21 @@ describe('submitBirthdayUpdate', () => {
       }),
     ).rejects.toThrow('Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.');
   });
+
+  it('retourne un message générique quand la fonction ne fournit aucun détail', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: null,
+      error: 'Edge Function returned a non-2xx status code',
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow("Impossible d'enregistrer l'anniversaire");
+  });
 });

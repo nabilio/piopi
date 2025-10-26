@@ -162,16 +162,17 @@ export async function submitBirthdayUpdate(
         ? null
         : rawErrorMessage;
 
-    const rawMessage =
-      sanitizedErrorMessage ??
-      extractMessage(data) ??
-      rawErrorMessage ??
-      (typeof error === 'object' && error !== null && 'name' in error && typeof (error as { name?: unknown }).name === 'string'
-        ? (error as { name?: string }).name ?? ''
-        : '') ??
-      '';
+    const messageCandidates: Array<string | null> = [
+      sanitizedErrorMessage,
+      extractMessage(data),
+      typeof error === 'object' && error !== null && 'name' in error && typeof (error as { name?: unknown }).name === 'string'
+        ? ((error as { name?: string }).name ?? '').trim() || null
+        : null,
+    ];
 
-    throw new Error(mapBirthdayUpdateError(rawMessage));
+    const finalMessage = messageCandidates.find((candidate) => candidate && candidate.trim() !== '') ?? '';
+
+    throw new Error(mapBirthdayUpdateError(finalMessage));
   }
 
   if (!data || typeof data !== 'object') {
