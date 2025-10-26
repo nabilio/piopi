@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { supabase } from '../supabase';
 import { normalizeBirthdayInput, submitBirthdayUpdate } from '../birthdayService';
-
-declare const global: typeof globalThis & { fetch: typeof fetch };
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -25,12 +24,10 @@ describe('submitBirthdayUpdate', () => {
   it('envoie la date normalisée vers la fonction Edge', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
 
-    const mockResponse = {
-      ok: true,
-      json: vi.fn().mockResolvedValue({ childId: 'child-1', birthday: '2014-03-18' }),
-    } as unknown as Response;
-
-    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(mockResponse);
+    const invokeSpy = vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: { childId: 'child-1', birthday: '2014-03-18' },
+      error: null,
+    });
 
     const result = await submitBirthdayUpdate('token', {
       birthday: '2014-3-18',
@@ -38,15 +35,13 @@ describe('submitBirthdayUpdate', () => {
       childId: 'child-1',
     });
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://demo.supabase.co/functions/v1/update-child-birthday',
+    expect(invokeSpy).toHaveBeenCalledWith(
+      'update-child-birthday',
       expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+        body: { birthday: '2014-03-18', consent: true, childId: 'child-1' },
+        headers: { Authorization: 'Bearer token' },
       }),
     );
-    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
-    expect(body).toEqual({ birthday: '2014-03-18', consent: true, childId: 'child-1' });
     expect(result).toEqual({ childId: 'child-1', birthday: '2014-03-18' });
   });
 });

@@ -88,27 +88,56 @@ export async function submitBirthdayUpdate(
 ): Promise<{ childId: string; birthday: string }> {
   const normalized = normalizeBirthdayInput(birthday);
 
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-child-birthday`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      birthday: normalized,
-      consent,
-      childId,
-    }),
-  });
+  let data: unknown = null;
+  let error: unknown = null;
 
-  const payload = await response.json();
+  try {
+    const response = await supabase.functions.invoke('update-child-birthday', {
+      body: {
+        birthday: normalized,
+        consent,
+        childId,
+      },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
-  if (!response.ok) {
-    const rawMessage = typeof payload?.error === 'string' ? payload.error : '';
+    data = response.data;
+    error = response.error;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    throw new Error(mapBirthdayUpdateError(message));
+  }
+
+  if (error) {
+    const candidate = error as { message?: unknown; error?: unknown } | string;
+    const rawMessage =
+      typeof candidate === 'string' && candidate.trim() !== ''
+        ? candidate
+        : typeof candidate === 'object' && candidate !== null && typeof candidate.message === 'string' && candidate.message.trim() !== ''
+          ? candidate.message
+          : typeof candidate === 'object' && candidate !== null && typeof candidate.error === 'string'
+            ? candidate.error
+            : '';
+
     throw new Error(mapBirthdayUpdateError(rawMessage));
   }
 
-  return payload as { childId: string; birthday: string };
+  if (!data || typeof data !== 'object') {
+    throw new Error('Réponse invalide du service anniversaire.');
+  }
+
+  const payload = data as { childId?: unknown; birthday?: unknown };
+
+  if (typeof payload.childId !== 'string' || typeof payload.birthday !== 'string') {
+    throw new Error('Réponse invalide du service anniversaire.');
+  }
+
+  return {
+    childId: payload.childId,
+    birthday: payload.birthday,
+  };
 }
 
 export async function fetchParentChildrenWithBirthdays(parentId: string): Promise<Profile[]> {
@@ -183,7 +212,7 @@ export function computeUpcomingBirthdays(children: Profile[]): UpcomingBirthday[
   return children
     .filter((child) => child.birthday)
     .map((child) => {
-      const [year, month, day] = (child.birthday as string).split('-').map(Number);
+      const [, month, day] = (child.birthday as string).split('-').map(Number);
       const currentYear = today.getFullYear();
       let next = new Date(currentYear, (month ?? 1) - 1, day ?? 1);
 

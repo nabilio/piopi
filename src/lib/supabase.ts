@@ -35,7 +35,6 @@ export type Profile = {
   avatar_url?: string;
   birthday?: string | null;
   banned?: boolean;
-  birthday?: string | null;
   birthday_completed?: boolean;
   created_at: string;
 };
