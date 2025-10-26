@@ -1,15 +1,21 @@
 import { useEffect } from 'react';
 
-function isTouchDevice() {
+function isMobileLikeDevice() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') {
     return false;
   }
 
-  const hasTouchPoints = navigator.maxTouchPoints && navigator.maxTouchPoints > 0;
   const userAgent = navigator.userAgent || '';
+  const hasTouchPoints = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
   const isMobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const prefersCoarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const isNarrowViewport = window.innerWidth <= 1024;
 
-  return hasTouchPoints || isMobileUserAgent;
+  if (isMobileUserAgent) {
+    return true;
+  }
+
+  return hasTouchPoints && prefersCoarsePointer && isNarrowViewport;
 }
 
 export function useAutoFullscreen() {
@@ -18,7 +24,7 @@ export function useAutoFullscreen() {
       return;
     }
 
-    if (!document.fullscreenEnabled || !isTouchDevice()) {
+    if (!document.fullscreenEnabled || !isMobileLikeDevice()) {
       return;
     }
 
