@@ -49,6 +49,40 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+function isMissingBirthdayCompletionColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { message?: unknown; details?: unknown; code?: unknown };
+  const message =
+    (typeof candidate.message === 'string' && candidate.message) ||
+    (typeof candidate.details === 'string' && candidate.details) ||
+    '';
+
+  const code =
+    typeof candidate.code === 'string'
+      ? candidate.code.trim()
+      : typeof candidate.code === 'number'
+        ? String(candidate.code)
+        : '';
+
+  if (code === '42703' || code === 'PGRST204') {
+    return true;
+  }
+
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  if (!normalized.includes('birthday_completed')) {
+    return false;
+  }
+
+  return normalized.includes('does not exist') || normalized.includes('schema cache');
+}
+
 const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -143,19 +177,35 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       throw new Error('Cannot update another child profile');
     }
 
-    const { error: updateError } = await supabase
+    const updatePayload: Record<string, unknown> = { birthday: normalizedBirthday };
+
+    const { error: birthdayUpdateError } = await supabase
       .from('profiles')
-      .update({
-        birthday: normalizedBirthday,
-        birthday_completed: true,
-      })
+      .update(updatePayload)
       .eq('id', targetChildId);
 
-    if (updateError) {
-      const message = typeof updateError.message === 'string'
-        ? updateError.message
+    if (birthdayUpdateError) {
+      const message = typeof birthdayUpdateError.message === 'string'
+        ? birthdayUpdateError.message
         : 'Failed to update birthday';
-      const code = 'code' in updateError ? String(updateError.code) : undefined;
+      const code = 'code' in birthdayUpdateError ? String(birthdayUpdateError.code) : undefined;
+      const error = new Error(message);
+      if (code) {
+        (error as Error & { code?: string }).code = code;
+      }
+      throw error;
+    }
+
+    const { error: completionUpdateError } = await supabase
+      .from('profiles')
+      .update({ birthday_completed: true })
+      .eq('id', targetChildId);
+
+    if (completionUpdateError && !isMissingBirthdayCompletionColumn(completionUpdateError)) {
+      const message = typeof completionUpdateError.message === 'string'
+        ? completionUpdateError.message
+        : 'Failed to update birthday';
+      const code = 'code' in completionUpdateError ? String(completionUpdateError.code) : undefined;
       const error = new Error(message);
       if (code) {
         (error as Error & { code?: string }).code = code;
