@@ -28,6 +28,27 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
   const [shared, setShared] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+
+    const hasFinePointer = window.matchMedia ? window.matchMedia('(pointer: fine)').matches : false;
+    const previousCursor = document.body.style.cursor;
+    let shouldRestoreCursor = false;
+
+    if (hasFinePointer) {
+      document.body.style.cursor = 'none';
+      shouldRestoreCursor = true;
+    }
+
+    return () => {
+      if (shouldRestoreCursor) {
+        document.body.style.cursor = previousCursor;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const paragraphs = story.content.split('\n\n').filter(p => p.trim());
     const wordsPerPage = 12;
     const newPages: string[] = [];
@@ -104,7 +125,10 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 z-50 overflow-hidden">
+    <div
+      className="fixed inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 z-50 overflow-hidden flex flex-col"
+      style={{ minHeight: '100dvh' }}
+    >
       <button
         onClick={onClose}
         className="absolute top-6 right-6 z-10 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition-all"
@@ -127,7 +151,7 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
                 <button
                   onClick={handleShare}
                   disabled={sharing || shared}
-                  className={`relative flex items-center justify-center gap-2 font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed w-full sm:w-auto ${
+                  className={`relative flex items-center justify-center gap-2 font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed w-full sm:w-auto ${
                     shared
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
                       : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
@@ -139,14 +163,14 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
                 {onStartQuiz && (
                   <button
                     onClick={onStartQuiz}
-                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                   >
                     Commencer le quiz 🎯
                   </button>
                 )}
                 <button
                   onClick={onClose}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
+                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                 >
                   <ArrowLeft size={24} />
                   Retour
