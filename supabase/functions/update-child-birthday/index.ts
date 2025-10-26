@@ -161,9 +161,15 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
         typeof (primaryUpdateError as { details?: unknown }).details === 'string'
           ? String((primaryUpdateError as { details?: unknown }).details)
           : '';
+      const code =
+        typeof (primaryUpdateError as { code?: unknown }).code === 'string'
+          ? String((primaryUpdateError as { code?: unknown }).code)
+          : typeof (primaryUpdateError as { code?: unknown }).code === 'number'
+            ? String((primaryUpdateError as { code?: unknown }).code)
+            : '';
       const combined = `${message} ${details}`.toLowerCase();
 
-      if (combined.includes('birthday_completed') && combined.includes('does not exist')) {
+      if (code === '42703' || (combined.includes('birthday_completed') && combined.includes('does not exist'))) {
         const { error: fallbackError } = await supabase
           .from('profiles')
           .update(updatePayload)

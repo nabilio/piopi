@@ -22,6 +22,11 @@ Les fonctions suivantes doivent être déployées :
    - Fichier : `supabase/functions/send-email/index.ts`
    - Template `email_confirmation` déjà présent
 
+4. **update-child-birthday** (NOUVELLE)
+   - Fichier : `supabase/functions/update-child-birthday/index.ts`
+   - Met à jour l'anniversaire d'un enfant en appliquant les fallback pour les anciennes colonnes `profiles`
+   - **Important :** redéployez cette fonction après chaque modification pour qu'elle soit disponible côté Supabase
+
 ### Comment déployer ?
 
 Vous avez deux options :
@@ -105,10 +110,11 @@ supabase db push
 
 ### 2. Déployer les Edge Functions
 
-Trois fonctions à déployer :
+Quatre fonctions à déployer :
 - `register-with-email-confirmation` (nouvelle)
 - `resend-confirmation-email` (nouvelle)
 - `send-email` (déjà existe, vérifier que le template est à jour)
+- `update-child-birthday` (nouvelle, nécessaire pour la fonctionnalité d'anniversaire)
 
 **Via Supabase CLI :**
 ```bash

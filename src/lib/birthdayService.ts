@@ -20,7 +20,53 @@ export type UpdateBirthdayResult = {
 
 const ISO_BIRTHDAY_REGEX = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-function extractErrorMessage(error: unknown): string {
+type ResponseLike = {
+  clone?: () => ResponseLike;
+  text?: () => Promise<string>;
+};
+
+function isResponseLike(value: unknown): value is ResponseLike {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    ('text' in (value as ResponseLike) && typeof (value as ResponseLike).text === 'function')
+  );
+}
+
+async function extractMessageFromResponseLike(source: unknown): Promise<string> {
+  if (!isResponseLike(source)) {
+    return '';
+  }
+
+  try {
+    const response = typeof source.clone === 'function' ? source.clone() : source;
+    const text = typeof response.text === 'function' ? await response.text() : '';
+
+    if (!text) {
+      return '';
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') {
+        if (typeof (parsed as { error?: unknown }).error === 'string') {
+          return (parsed as { error?: string }).error ?? '';
+        }
+        if (typeof (parsed as { message?: unknown }).message === 'string') {
+          return (parsed as { message?: string }).message ?? '';
+        }
+      }
+    } catch {
+      // Ignore JSON parse failures and fall through to return raw text.
+    }
+
+    return text;
+  } catch {
+    return '';
+  }
+}
+
+async function extractErrorMessage(error: unknown): Promise<string> {
   if (!error) {
     return '';
   }
@@ -30,7 +76,25 @@ function extractErrorMessage(error: unknown): string {
   }
 
   if (error instanceof Error) {
-    return error.message;
+    const message = error.message?.trim();
+    const genericEdgeMessages = new Set([
+      'Edge Function returned a non-2xx status code',
+      'Relay Error invoking the Edge Function',
+      'Failed to send a request to the Edge Function',
+    ]);
+
+    const contextMessage = await extractMessageFromResponseLike((error as { context?: unknown }).context);
+    if (contextMessage) {
+      return contextMessage;
+    }
+
+    if (message && !genericEdgeMessages.has(message)) {
+      return message;
+    }
+
+    if (message) {
+      return message;
+    }
   }
 
   if (typeof error === 'object') {
@@ -40,25 +104,51 @@ function extractErrorMessage(error: unknown): string {
       return record.error;
     }
 
+    if (record.error) {
+      const nested = await extractErrorMessage(record.error);
+      if (nested) {
+        return nested;
+      }
+    }
+
     if (typeof record.message === 'string') {
       return record.message;
+    }
+
+    if (record.message) {
+      const nested = await extractErrorMessage(record.message);
+      if (nested) {
+        return nested;
+      }
     }
 
     if (typeof record.data === 'string') {
       try {
         const parsed = JSON.parse(record.data);
-        return extractErrorMessage(parsed);
+        return await extractErrorMessage(parsed);
       } catch {
         return record.data;
       }
+    }
+
+    if (record.data) {
+      const nested = await extractErrorMessage(record.data);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    const contextMessage = await extractMessageFromResponseLike(record.response ?? record.context);
+    if (contextMessage) {
+      return contextMessage;
     }
   }
 
   return '';
 }
 
-function mapUpdateError(error: unknown): string {
-  const rawMessage = extractErrorMessage(error).trim();
+async function mapUpdateError(error: unknown): Promise<string> {
+  const rawMessage = (await extractErrorMessage(error)).trim();
 
   if (!rawMessage) {
     return "Impossible d'enregistrer l'anniversaire";
@@ -197,6 +287,17 @@ function mapProfileToRecord(profile: any): ChildBirthdayRecord {
   const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
   const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
 
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+  const diff = next.getTime() - today.getTime();
+  const daysUntil = Math.round(diff / millisecondsPerDay);
+
+  return { date: next, daysUntil };
+}
+
+function mapProfileToRecord(profile: any): ChildBirthdayRecord {
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
+  const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
+
   return {
     id: String(profile.id),
     fullName:
@@ -213,11 +314,22 @@ function isMissingBirthdayCompletionColumn(error: unknown): boolean {
     return false;
   }
 
-  const candidate = error as { message?: unknown; details?: unknown }; // Supabase PostgREST error shape
+  const candidate = error as { message?: unknown; details?: unknown; code?: unknown };
   const message =
     (typeof candidate.message === 'string' && candidate.message) ||
     (typeof candidate.details === 'string' && candidate.details) ||
     '';
+
+  const code =
+    typeof candidate.code === 'string'
+      ? candidate.code.trim()
+      : typeof candidate.code === 'number'
+        ? String(candidate.code)
+        : '';
+
+  if (code === '42703') {
+    return true;
+  }
 
   if (!message) {
     return false;
@@ -322,7 +434,7 @@ export async function updateChildBirthday(
       birthday: payload.birthday,
     };
   } catch (error) {
-    throw new Error(mapUpdateError(error));
+    throw new Error(await mapUpdateError(error));
   }
 }
 
