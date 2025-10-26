@@ -287,6 +287,17 @@ function mapProfileToRecord(profile: any): ChildBirthdayRecord {
   const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
   const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
 
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+  const diff = next.getTime() - today.getTime();
+  const daysUntil = Math.round(diff / millisecondsPerDay);
+
+  return { date: next, daysUntil };
+}
+
+function mapProfileToRecord(profile: any): ChildBirthdayRecord {
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday : null;
+  const hasCompletionFlag = typeof profile.birthday_completed === 'boolean';
+
   return {
     id: String(profile.id),
     fullName:
