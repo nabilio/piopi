@@ -1,102 +1,64 @@
 import '@testing-library/jest-dom';
-import { cleanup, render, screen, waitFor, act } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChildBirthdaysPage } from '../components/ChildBirthdaysPage';
 import { ParentBirthdays } from '../components/ParentBirthdays';
-import { supabase, Profile } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import * as birthdayService from '../lib/birthdayService';
 
-let childBirthdayLoader: ((birthday: string | null) => void) | null = null;
-
-vi.mock('../components/BirthdayCard', () => ({
-  __esModule: true,
-  BirthdayCard: (props: any) => {
-    childBirthdayLoader = props.onChildBirthdayLoaded ?? null;
-    return <div data-testid="birthday-card" />;
-  },
-}));
-
-describe('Gestion des anniversaires', () => {
-  const childProfile: Profile = {
-    id: 'child-1',
-    email: 'child@example.com',
-    role: 'child',
-    full_name: 'Alice',
-    created_at: new Date().toISOString(),
-    birthday: null,
-    birthday_completed: false,
-  };
-
+describe('Refonte de la fonctionnalité anniversaire', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-03-10T00:00:00.000Z'));
     vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'key');
     vi.spyOn(supabase.auth, 'getSession').mockResolvedValue({
       data: { session: { access_token: 'token' } as any },
       error: null,
     });
-    vi.spyOn(birthdayService, 'fetchParentChildrenWithBirthdays').mockResolvedValue([]);
-    vi.spyOn(birthdayService, 'fetchBirthdayInvitations').mockResolvedValue([]);
-    childBirthdayLoader = null;
   });
 
   afterEach(() => {
     cleanup();
-    vi.useRealTimers();
-    vi.unstubAllEnvs();
     vi.restoreAllMocks();
-    childBirthdayLoader = null;
+    vi.unstubAllEnvs();
   });
 
-  it('affiche les messages adaptés sur la page anniversaire enfant', () => {
-    render(<ChildBirthdaysPage childId="child-1" onBack={() => {}} />);
-
-    expect(screen.getByText(/Nous préparons ta surprise/i)).toBeInTheDocument();
-
-    act(() => {
-      childBirthdayLoader?.(null);
+  it("permet à un enfant d'enregistrer sa date d'anniversaire", async () => {
+    vi.spyOn(birthdayService, 'fetchChildBirthday').mockResolvedValue({
+      id: 'child-1',
+      fullName: 'Alice',
+      birthday: null,
+      birthdayCompleted: false,
     });
 
-    expect(
-      screen.getByText(/Invite ton parent à ajouter ta date d'anniversaire/i),
-    ).toBeInTheDocument();
-
-    act(() => {
-      childBirthdayLoader?.('2014-03-18');
-    });
-
-    expect(
-      screen.getByText(/Ton jour d'anniversaire est le 18\/03\/2014 \(dans 8 jours\)/i),
-    ).toBeInTheDocument();
-  });
-
-  it("permet au parent d'enregistrer la date d'anniversaire de son enfant", async () => {
-    const user = userEvent.setup();
-
-    const parentChildren: Profile[] = [
-      {
-        ...childProfile,
-      },
-    ];
-
-    vi.spyOn(birthdayService, 'fetchParentChildrenWithBirthdays').mockResolvedValue(parentChildren);
-    const submitSpy = vi
-      .spyOn(birthdayService, 'submitBirthdayUpdate')
+    const updateSpy = vi
+      .spyOn(birthdayService, 'updateChildBirthday')
       .mockResolvedValue({ childId: 'child-1', birthday: '2014-03-18' });
 
-    render(<ParentBirthdays onBack={() => {}} parentId="parent-1" />);
+    const user = userEvent.setup();
 
-    expect(await screen.findByText('Alice')).toBeInTheDocument();
+    render(
+      <ChildBirthdaysPage
+        childId="child-1"
+        onBack={() => {}}
+      />,
+    );
 
-    const dateInput = await screen.findByLabelText("Date d'anniversaire pour Alice");
-    await user.clear(dateInput);
+    expect(await screen.findByText(/Demande à ton parent/i)).toBeInTheDocument();
+
+    const dateInput = screen.getByLabelText("Date d'anniversaire");
     await user.type(dateInput, '2014-03-18');
 
-    await user.click(screen.getByRole('button', { name: /Enregistrer/i }));
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Je confirme que mon parent ou responsable légal est d'accord/i,
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /Enregistrer ma date/i }));
 
     await waitFor(() =>
-      expect(submitSpy).toHaveBeenCalledWith('token', {
+      expect(updateSpy).toHaveBeenCalledWith('token', {
         birthday: '2014-03-18',
         consent: true,
         childId: 'child-1',
@@ -104,7 +66,50 @@ describe('Gestion des anniversaires', () => {
     );
 
     expect(
-      await screen.findByText(/Date d'anniversaire enregistrée avec succès/i),
+      await screen.findByText(/Anniversaire enregistré avec succès/i),
+    ).toBeInTheDocument();
+  });
+
+  it("permet au parent d'enregistrer l'anniversaire de son enfant", async () => {
+    vi.spyOn(birthdayService, 'fetchParentChildBirthdays').mockResolvedValue([
+      {
+        id: 'child-1',
+        fullName: 'Alice',
+        birthday: null,
+        birthdayCompleted: false,
+      },
+    ]);
+
+    const updateSpy = vi
+      .spyOn(birthdayService, 'updateChildBirthday')
+      .mockResolvedValue({ childId: 'child-1', birthday: '2014-03-18' });
+
+    const user = userEvent.setup();
+
+    render(
+      <ParentBirthdays
+        parentId="parent-1"
+        onBack={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText('Alice')).toBeInTheDocument();
+
+    const dateInput = screen.getByLabelText("Date d'anniversaire");
+    await user.type(dateInput, '2014-03-18');
+
+    await user.click(screen.getByRole('button', { name: /Enregistrer/i }));
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    );
+
+    expect(
+      await screen.findByText(/Date d'anniversaire enregistrée/i),
     ).toBeInTheDocument();
   });
 });
