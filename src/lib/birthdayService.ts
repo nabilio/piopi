@@ -43,35 +43,53 @@ export function normalizeBirthdayInput(value: string): string {
 }
 
 function mapBirthdayUpdateError(message: string): string {
+  const fallbackMessage = 'Impossible d\'enregistrer l\'anniversaire';
+
   if (!message) {
-    return 'Impossible d\'enregistrer l\'anniversaire';
+    return fallbackMessage;
   }
 
-  if (message === 'Parental consent is required') {
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) {
+    return fallbackMessage;
+  }
+
+  const normalized = trimmedMessage.toLowerCase();
+  const genericSupabaseFailures = [
+    'function invocation http error',
+    'function http error',
+    'fonction http error',
+  ];
+
+  if (genericSupabaseFailures.some((needle) => normalized.includes(needle))) {
+    return fallbackMessage;
+  }
+
+  if (trimmedMessage === 'Parental consent is required') {
     return 'Le consentement parental est obligatoire.';
   }
 
-  if (message === 'Child profile not found' || message === 'Profile not found') {
+  if (trimmedMessage === 'Child profile not found' || trimmedMessage === 'Profile not found') {
     return 'Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.';
   }
 
-  if (message === 'Supabase service is not configured correctly') {
+  if (trimmedMessage === 'Supabase service is not configured correctly') {
     return 'Le service anniversaire est indisponible pour le moment. Contactez un administrateur.';
   }
 
-  if (message.includes('Database migration for birthday tracking is missing')) {
+  if (trimmedMessage.includes('Database migration for birthday tracking is missing')) {
     return 'La base de données n\'est pas à jour pour le suivi des anniversaires. Merci de contacter un administrateur.';
   }
 
-  if (message.includes('Access to the profiles table is blocked by RLS policies')) {
+  if (trimmedMessage.includes('Access to the profiles table is blocked by RLS policies')) {
     return 'Accès refusé pour l\'enregistrement de l\'anniversaire. Vérifiez la configuration des permissions sur Supabase.';
   }
 
-  if (message.includes('Invalid birthday format') || message.includes('Birthday is required')) {
+  if (trimmedMessage.includes('Invalid birthday format') || trimmedMessage.includes('Birthday is required')) {
     return 'La date d\'anniversaire fournie est invalide.';
   }
 
-  return message;
+  return trimmedMessage;
 }
 
 export async function submitBirthdayUpdate(
@@ -111,17 +129,68 @@ export async function submitBirthdayUpdate(
   }
 
   if (error) {
-    const candidate = error as { message?: unknown; error?: unknown } | string;
-    const rawMessage =
-      typeof candidate === 'string' && candidate.trim() !== ''
-        ? candidate
-        : typeof candidate === 'object' && candidate !== null && typeof candidate.message === 'string' && candidate.message.trim() !== ''
-          ? candidate.message
-          : typeof candidate === 'object' && candidate !== null && typeof candidate.error === 'string'
-            ? candidate.error
-            : '';
+    const extractMessage = (candidate: unknown): string | null => {
+      if (!candidate) {
+        return null;
+      }
 
-    throw new Error(mapBirthdayUpdateError(rawMessage));
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        return trimmed === '' ? null : trimmed;
+      }
+
+      if (typeof candidate === 'object') {
+        const record = candidate as Record<string, unknown>;
+
+        if (typeof record.context === 'object' && record.context !== null) {
+          const contextRecord = record.context as Record<string, unknown>;
+          const contextKeys: Array<'error' | 'message'> = ['error', 'message'];
+          for (const key of contextKeys) {
+            const value = contextRecord[key];
+            if (typeof value === 'string' && value.trim() !== '') {
+              return value.trim();
+            }
+          }
+        }
+
+        const directKeys: Array<'error' | 'message'> = ['error', 'message'];
+        for (const key of directKeys) {
+          const value = record[key];
+          if (typeof value === 'string' && value.trim() !== '') {
+            return value.trim();
+          }
+        }
+
+        if (typeof record.data === 'string') {
+          try {
+            const parsed = JSON.parse(record.data);
+            return extractMessage(parsed);
+          } catch {
+            // Ignore JSON parse errors and continue with other fallbacks
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const rawErrorMessage = extractMessage(error);
+    const sanitizedErrorMessage =
+      rawErrorMessage && rawErrorMessage.toLowerCase().startsWith('edge function returned a non-2xx status code')
+        ? null
+        : rawErrorMessage;
+
+    const messageCandidates: Array<string | null> = [
+      sanitizedErrorMessage,
+      extractMessage(data),
+      typeof error === 'object' && error !== null && 'name' in error && typeof (error as { name?: unknown }).name === 'string'
+        ? ((error as { name?: string }).name ?? '').trim() || null
+        : null,
+    ];
+
+    const finalMessage = messageCandidates.find((candidate) => candidate && candidate.trim() !== '') ?? '';
+
+    throw new Error(mapBirthdayUpdateError(finalMessage));
   }
 
   if (!data || typeof data !== 'object') {

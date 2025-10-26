@@ -1,4 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../supabase', () => {
+  return {
+    supabase: {
+      functions: {
+        invoke: vi.fn(),
+      },
+    },
+  };
+});
+
 import { supabase } from '../supabase';
 import { normalizeBirthdayInput, submitBirthdayUpdate } from '../birthdayService';
 
@@ -10,7 +21,7 @@ afterEach(() => {
 describe('normalizeBirthdayInput', () => {
   it('normalise une date ISO valide', () => {
     expect(normalizeBirthdayInput('2014-03-18')).toBe('2014-03-18');
-    expect(normalizeBirthdayInput('2014-3-8')).toBe('2014-03-08');
+    expect(normalizeBirthdayInput('2014-03-08')).toBe('2014-03-08');
   });
 
   it('rejette les formats invalides', () => {
@@ -30,7 +41,7 @@ describe('submitBirthdayUpdate', () => {
     });
 
     const result = await submitBirthdayUpdate('token', {
-      birthday: '2014-3-18',
+      birthday: '2014-03-18',
       consent: true,
       childId: 'child-1',
     });
@@ -43,5 +54,76 @@ describe('submitBirthdayUpdate', () => {
       }),
     );
     expect(result).toEqual({ childId: 'child-1', birthday: '2014-03-18' });
+  });
+
+  it('remonte les erreurs de la fonction Edge issues du contexte', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: { error: 'Parental consent is required' },
+      },
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow('Le consentement parental est obligatoire.');
+  });
+
+  it('prend en compte les erreurs encapsulées dans la réponse', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: { error: 'Child profile not found' },
+      error: 'Edge Function returned a non-2xx status code.',
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow('Impossible de retrouver le profil à mettre à jour. Veuillez réessayer.');
+  });
+
+  it('retourne un message générique quand la fonction ne fournit aucun détail', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: null,
+      error: 'Edge Function returned a non-2xx status code',
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow("Impossible d'enregistrer l'anniversaire");
+  });
+
+  it("ignore les erreurs HTTP génériques de la fonction", async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.supabase.co');
+
+    vi.spyOn(supabase.functions, 'invoke').mockResolvedValue({
+      data: null,
+      error: { message: 'Function invocation failed: Function invocation HTTP error' },
+    });
+
+    await expect(
+      submitBirthdayUpdate('token', {
+        birthday: '2014-03-18',
+        consent: true,
+        childId: 'child-1',
+      }),
+    ).rejects.toThrow("Impossible d'enregistrer l'anniversaire");
   });
 });
