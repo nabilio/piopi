@@ -582,7 +582,6 @@ function AppContent() {
             setChildBirthdaysChildId(null);
             setView('home');
           }}
-          onManageFriends={() => handleNavigationAttempt('network')}
         />
       )}
 
