@@ -1,5 +1,55 @@
 # Instructions de Déploiement
 
+## Déploiement du build statique avec PM2
+
+Ces étapes remplacent l'ancienne commande `pm2 start "serve -s ./dist -l 3001"` qui pouvait échouer sur Windows lorsque `pm2` était lancé en dehors du dossier du projet.
+
+1. **Se placer dans le dossier du projet**
+
+   ```bash
+   cd /home/adminio/htdocs/lapsi.online
+   ```
+
+   > Sous Windows, ouvrez un terminal (PowerShell ou Git Bash) et exécutez la commande `cd` vers le dossier qui contient `package.json` **avant** d'appeler `npm ci` ou `pm2`.
+
+2. **Installer les dépendances puis builder**
+
+   ```bash
+   npm ci
+   npm run build
+   ```
+
+3. **Démarrer le serveur statique via PM2**
+
+   ```bash
+   # Linux / macOS
+   PORT=3001 pm2 start ecosystem.config.cjs --env production
+
+   # Windows (PowerShell)
+   $env:PORT="3001"; pm2 start ecosystem.config.cjs --env production
+   ```
+
+   Le fichier `ecosystem.config.cjs` lance automatiquement `node scripts/serve-dist.mjs`, un petit serveur HTTP qui diffuse le contenu du dossier `dist` avec un fallback sur `index.html` pour le SPA React.
+
+4. **Sauvegarder l'état PM2 (optionnel mais recommandé)**
+
+   ```bash
+   pm2 save
+   ```
+
+5. **Redémarrer après un nouveau build**
+
+   ```bash
+   pm2 restart piopi-prod
+   ```
+
+6. **Vérifier que le serveur répond**
+
+   - Ouvrez `http://<votre-domaine>:3001`
+   - Contrôlez que la notification anniversaire, la modale enfant et la vue parent fonctionnent toujours.
+
+---
+
 ## Problème 1 : Failed to fetch lors de l'inscription
 
 **Cause :** Les nouvelles edge functions ne sont pas encore déployées sur Supabase.
