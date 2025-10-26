@@ -143,13 +143,45 @@ const denoServe: Deno.ServeHandler = async (req: Request): Promise<Response> => 
       throw new Error('Cannot update another child profile');
     }
 
-    const { error: updateError } = await supabase
+    const updatePayload: Record<string, unknown> = { birthday: normalizedBirthday };
+
+    let updateError: { message?: unknown; code?: unknown } | null = null;
+
+    const { error: primaryUpdateError } = await supabase
       .from('profiles')
       .update({
-        birthday: normalizedBirthday,
+        ...updatePayload,
         birthday_completed: true,
       })
       .eq('id', targetChildId);
+
+    if (primaryUpdateError && typeof primaryUpdateError === 'object') {
+      const message = typeof primaryUpdateError.message === 'string' ? primaryUpdateError.message : '';
+      const details =
+        typeof (primaryUpdateError as { details?: unknown }).details === 'string'
+          ? String((primaryUpdateError as { details?: unknown }).details)
+          : '';
+      const code =
+        typeof (primaryUpdateError as { code?: unknown }).code === 'string'
+          ? String((primaryUpdateError as { code?: unknown }).code)
+          : typeof (primaryUpdateError as { code?: unknown }).code === 'number'
+            ? String((primaryUpdateError as { code?: unknown }).code)
+            : '';
+      const combined = `${message} ${details}`.toLowerCase();
+
+      if (code === '42703' || (combined.includes('birthday_completed') && combined.includes('does not exist'))) {
+        const { error: fallbackError } = await supabase
+          .from('profiles')
+          .update(updatePayload)
+          .eq('id', targetChildId);
+
+        updateError = fallbackError;
+      } else {
+        updateError = primaryUpdateError as { message?: unknown; code?: unknown };
+      }
+    } else {
+      updateError = primaryUpdateError as { message?: unknown; code?: unknown } | null;
+    }
 
     if (updateError) {
       const message = typeof updateError.message === 'string'
