@@ -70,7 +70,29 @@ Deno.serve(async (req: Request) => {
       throw new Error('Access denied for this child profile.');
     }
 
-    if (!childProfile.email) {
+    let childEmail = childProfile.email;
+
+    if (!childEmail) {
+      const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(childProfile.id);
+
+      if (authUserError || !authUserData?.user?.email) {
+        console.error('Error fetching child auth user:', authUserError);
+        throw new Error("Ce profil enfant ne possède pas d'email de connexion. Contactez le support.");
+      }
+
+      childEmail = authUserData.user.email;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ email: childEmail })
+        .eq('id', childProfile.id);
+
+      if (updateError) {
+        console.error('Error syncing child email to profile:', updateError);
+      }
+    }
+
+    if (!childEmail) {
       throw new Error("Ce profil enfant ne possède pas d'email de connexion.");
     }
 
@@ -79,7 +101,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
-      email: childProfile.email,
+      email: childEmail,
       options: {
         redirectTo
       }

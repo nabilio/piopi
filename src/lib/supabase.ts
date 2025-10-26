@@ -22,7 +22,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export type Profile = {
   id: string;
-  email: string;
+  email: string | null;
   role: 'parent' | 'child' | 'admin';
   full_name: string;
   age?: number;
