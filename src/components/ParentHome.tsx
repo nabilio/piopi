@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Sparkles, Trophy, BookOpen, Brain, Target, Users, Star, Gamepad2, Share2, Baby, Book, CalendarHeart } from 'lucide-react';
+import { Plus, Sparkles, Trophy, BookOpen, Brain, Target, Users, Star, Gamepad2, Share2, Baby, Book, CalendarHeart, QrCode } from 'lucide-react';
 import { supabase, Profile } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AddChildModal } from './AddChildModal';
+import { ChildLoginQRCodeModal } from './ChildLoginQRCodeModal';
 
 type ParentHomeProps = {
   onChildSelect: (childId: string) => void;
@@ -19,6 +20,7 @@ export function ParentHome({ onChildSelect, onNavigate }: ParentHomeProps) {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newChildData, setNewChildData] = useState({ full_name: '', age: '', grade_level: '' });
   const [addingChild, setAddingChild] = useState(false);
+  const [qrChild, setQrChild] = useState<Profile | null>(null);
   const getMaxChildren = () => {
     if (!subscription) return 1;
     const planLimits: Record<string, number> = {
@@ -386,42 +388,53 @@ export function ParentHome({ onChildSelect, onNavigate }: ParentHomeProps) {
                 </div>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
               {children.map((child) => (
-                <div key={child.id} className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition">
+                <div key={child.id} className="relative rounded-xl bg-white p-4 shadow-lg transition hover:shadow-xl sm:rounded-2xl sm:p-6">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setQrChild(child);
+                    }}
+                    className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-purple-50 p-2 text-purple-600 shadow-sm transition hover:bg-purple-100 hover:text-purple-700"
+                    aria-label={`Afficher le QR code de connexion pour ${child.full_name}`}
+                  >
+                    <QrCode size={18} />
+                  </button>
                   <button
                     onClick={() => onChildSelect(child.id)}
-                    className="w-full group text-left"
+                    className="group w-full pt-4 text-left sm:pt-6"
                   >
-                    <div className="flex flex-col items-center text-center gap-3 sm:gap-4 mb-4">
+                    <div className="mb-4 flex flex-col items-center gap-3 text-center sm:gap-4">
                       <div className="relative">
                         <AvatarDisplay
                           userId={child.id}
                           fallbackName={child.full_name}
                           size="lg"
                         />
-                        <div className="absolute -bottom-1 -right-1 bg-yellow-400 rounded-full p-1.5 sm:p-2 shadow-lg">
-                          <Trophy size={16} className="text-yellow-900 sm:w-5 sm:h-5" />
+                        <div className="absolute -bottom-1 -right-1 rounded-full bg-yellow-400 p-1.5 shadow-lg sm:p-2">
+                          <Trophy size={16} className="text-yellow-900 sm:h-5 sm:w-5" />
                         </div>
                       </div>
                       <div className="w-full">
-                        <h3 className="text-lg sm:text-xl font-bold text-gray-800 group-hover:text-purple-600 transition mb-2 truncate">
+                        <h3 className="truncate text-lg font-bold text-gray-800 transition group-hover:text-purple-600 sm:text-xl">
                           {child.full_name}
                         </h3>
-                        <div className="flex items-center justify-center gap-2 mb-3">
-                          <span className="bg-blue-100 px-2.5 py-1 rounded-full text-xs font-bold text-blue-700">
+                        <div className="mb-3 flex items-center justify-center gap-2">
+                          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
                             {child.age} ans
                           </span>
                           {child.grade_level && (
-                            <span className="bg-green-100 px-2.5 py-1 rounded-full text-xs font-bold text-green-700">
+                            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
                               {child.grade_level}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
-                    <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-3 group-hover:from-purple-200 group-hover:to-pink-200 transition">
-                      <p className="text-xs sm:text-sm font-bold text-purple-700 text-center">
+                    <div className="rounded-xl bg-gradient-to-r from-purple-100 to-pink-100 p-3 transition group-hover:from-purple-200 group-hover:to-pink-200">
+                      <p className="text-center text-xs font-bold text-purple-700 sm:text-sm">
                         Commencer l'aventure ! ✨
                       </p>
                     </div>
@@ -527,6 +540,13 @@ export function ParentHome({ onChildSelect, onNavigate }: ParentHomeProps) {
         maxChildren={subscription ? getMaxChildren() : 1}
         planType={subscription?.plan_type || 'basic'}
       />
+
+      {qrChild ? (
+        <ChildLoginQRCodeModal
+          child={qrChild}
+          onClose={() => setQrChild(null)}
+        />
+      ) : null}
     </div>
   );
 }
