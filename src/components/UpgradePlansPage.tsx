@@ -1,17 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Check, Crown, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
+import {
+  createPaypalOrder,
+  createStripeCheckout,
+  verifyStripeCheckout,
+  capturePaypalOrder,
+} from '../utils/payment';
+
+type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
 
 type Plan = {
-  id: string;
+  id: PlanId;
   name: string;
   maxChildren: number;
   pricePerMonth: number;
   features: string[];
   recommended?: boolean;
   badge?: string;
+};
+
+type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled';
+
+type SubscriptionRecord = {
+  id: string;
+  user_id: string;
+  plan_type: PlanId;
+  status: SubscriptionStatus;
+  children_count: number | null;
+  trial_end_date: string;
+};
+
+type PendingUpgradePayload = {
+  planId: PlanId;
+  method: 'stripe' | 'paypal';
+  sessionId?: string;
+  orderId?: string;
+  billedChildren?: number;
 };
 
 const PLANS: Plan[] = [
@@ -92,7 +119,7 @@ const PLANS: Plan[] = [
   }
 ];
 
-const BASE_PLAN_PRICES: Record<string, number> = {
+const BASE_PLAN_PRICES: Record<PlanId, number> = {
   basic: 2,
   duo: 3,
   family: 5,
@@ -142,7 +169,16 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<Plan>(PLANS[0]);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
+  const [paymentInProgress, setPaymentInProgress] = useState(false);
+  const [pendingFinalization, setPendingFinalization] = useState<null | {
+    method: 'stripe' | 'paypal';
+    planId: PlanId;
+    sessionId?: string;
+    orderId?: string;
+    billedChildren?: number;
+  }>(null);
+  const [activePaymentProvider, setActivePaymentProvider] = useState<'stripe' | 'paypal' | null>(null);
 
   const recordedChildrenCount = subscription?.children_count ?? 0;
   const effectiveChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount, 1);
@@ -152,6 +188,25 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   const selectedPlanPrice = selectedPlan && billedSelectedChildren !== null
     ? computePlanPrice(selectedPlan, billedSelectedChildren)
     : null;
+
+  const isReactivation = useMemo(() => {
+    if (!selectedPlan || !subscription) return false;
+    return selectedPlan.id === currentPlan.id && subscription.status === 'cancelled';
+  }, [selectedPlan, subscription, currentPlan.id]);
+
+  const isUpgrade = useMemo(() => {
+    if (!selectedPlan || !subscription || billedSelectedChildren === null) return false;
+    const billedChildrenCurrentPlan = getBillingChildrenCount(currentPlan, effectiveChildrenCount);
+    const newPrice = computePlanPrice(selectedPlan, billedSelectedChildren);
+    const oldPrice = computePlanPrice(currentPlan, billedChildrenCurrentPlan);
+    return newPrice > oldPrice || billedSelectedChildren > billedChildrenCurrentPlan;
+  }, [selectedPlan, subscription, billedSelectedChildren, currentPlan, effectiveChildrenCount]);
+
+  const requiresPayment = useMemo(() => {
+    if (!selectedPlan) return false;
+    if (isReactivation) return true;
+    return isUpgrade;
+  }, [isUpgrade, isReactivation, selectedPlan]);
 
   useEffect(() => {
     async function loadSubscription() {
@@ -164,7 +219,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
       if (!parentId) return;
 
       const { data: subData } = await supabase
-        .from('subscriptions')
+        .from<SubscriptionRecord>('subscriptions')
         .select('*')
         .eq('user_id', parentId)
         .maybeSingle();
@@ -186,10 +241,19 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
     loadSubscription();
   }, [user, profile, currentChildrenCount]);
 
-  async function handleUpgrade() {
-    if (!selectedPlan) return;
+  const finalizeUpgrade = useCallback(async (
+    plan: Plan,
+    paymentMethod: 'stripe' | 'paypal' | 'manual',
+    options?: {
+      billedChildren?: number;
+      sessionId?: string;
+      orderId?: string;
+    }
+  ) => {
+    if (!plan) return;
 
     setLoading(true);
+
     try {
       const parentId = profile?.role === 'child' && profile?.parent_id
         ? profile.parent_id
@@ -203,24 +267,39 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         throw new Error('Aucun abonnement trouvé');
       }
 
+      if (paymentMethod === 'stripe' && options?.sessionId) {
+        const verification = await verifyStripeCheckout(options.sessionId);
+        if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+          throw new Error('Le paiement Stripe n\'est pas confirmé');
+        }
+      }
+
+      if (paymentMethod === 'paypal' && options?.orderId) {
+        const capture = await capturePaypalOrder(options.orderId);
+        if (capture.status !== 'COMPLETED') {
+          throw new Error('La capture PayPal a échoué');
+        }
+      }
+
       const recordedChildrenCount = subscription.children_count ?? 0;
       const actualChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount, 1);
       const billedCurrentChildren = getBillingChildrenCount(currentPlan, actualChildrenCount);
-      const billedSelectedChildren = getBillingChildrenCount(selectedPlan, actualChildrenCount);
+      const billedSelectedChildren = options?.billedChildren
+        ?? getBillingChildrenCount(plan, actualChildrenCount);
       const oldPrice = computePlanPrice(currentPlan, billedCurrentChildren);
-      const newPrice = computePlanPrice(selectedPlan, billedSelectedChildren);
+      const newPrice = computePlanPrice(plan, billedSelectedChildren);
       const newChildrenCount = billedSelectedChildren;
 
-      const isReactivation = selectedPlan.id === currentPlan.id && subscription.status === 'cancelled';
-      const isUpgrade = !isReactivation && (newChildrenCount > billedCurrentChildren || newPrice > oldPrice);
-      const isDowngrade = !isReactivation && !isUpgrade && (newChildrenCount < billedCurrentChildren || newPrice < oldPrice);
-      const historyAction = isReactivation ? 'reactivated' : 'updated';
+      const reactivation = plan.id === currentPlan.id && subscription.status === 'cancelled';
+      const upgrade = !reactivation && (newChildrenCount > billedCurrentChildren || newPrice > oldPrice);
+      const downgrade = !reactivation && !upgrade && (newChildrenCount < billedCurrentChildren || newPrice < oldPrice);
+      const historyAction = reactivation ? 'reactivated' : 'updated';
 
       const { error: updateError } = await supabase
         .from('subscriptions')
         .update({
           children_count: newChildrenCount,
-          plan_type: selectedPlan.id,
+          plan_type: plan.id,
           status: 'active'
         })
         .eq('user_id', parentId);
@@ -233,12 +312,26 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
           user_id: parentId,
           children_count: newChildrenCount,
           price: newPrice,
-          plan_type: selectedPlan.id,
+          plan_type: plan.id,
           action_type: historyAction,
-          notes: isReactivation
-            ? `Réactivation du plan ${selectedPlan.name} (${newPrice}€/mois)`
-            : `Passage de ${currentPlan.name} (${oldPrice}€/mois) à ${selectedPlan.name} (${newPrice}€/mois)`
+          notes: reactivation
+            ? `Réactivation du plan ${plan.name} (${newPrice}€/mois)`
+            : `Passage de ${currentPlan.name} (${oldPrice}€/mois) à ${plan.name} (${newPrice}€/mois)`
         });
+
+      if (paymentMethod !== 'manual' && subscription.id) {
+        await supabase
+          .from('subscription_payments')
+          .insert({
+            subscription_id: subscription.id,
+            parent_id: parentId,
+            amount: newPrice,
+            children_count: newChildrenCount,
+            payment_method: paymentMethod,
+            payment_status: 'completed',
+            external_payment_id: options?.sessionId || options?.orderId || null,
+          });
+      }
 
       try {
         const recipientEmail = profile?.email || user?.email;
@@ -248,10 +341,10 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
           let template = 'subscription_upgraded';
           let subject = '✨ Abonnement mis à jour - PioPi';
 
-          if (isReactivation) {
+          if (reactivation) {
             template = 'subscription_upgraded';
             subject = '🎉 Abonnement réactivé - PioPi';
-          } else if (isDowngrade) {
+          } else if (downgrade) {
             template = 'subscription_downgraded';
             subject = '📊 Abonnement modifié - PioPi';
           }
@@ -300,20 +393,141 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         console.error('Failed to send email:', emailError);
       }
 
-      showToast(isReactivation ? 'Abonnement réactivé avec succès !' : 'Abonnement mis à jour avec succès !', 'success');
+      showToast(reactivation ? 'Abonnement réactivé avec succès !' : 'Abonnement mis à jour avec succès !', 'success');
+
+      localStorage.removeItem('pendingUpgrade');
+      setPendingFinalization(null);
 
       if (onSuccess) {
         onSuccess();
       } else {
         window.location.reload();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error upgrading plan:', error);
-      showToast(error.message || 'Erreur lors de la mise à jour', 'error');
+      const message = error instanceof Error ? error.message : 'Erreur lors de la mise à jour';
+      showToast(message, 'error');
       setLoading(false);
       setConfirming(false);
+      setPaymentInProgress(false);
+      setActivePaymentProvider(null);
     }
-  }
+  }, [currentPlan, currentChildrenCount, onSuccess, profile?.email, profile?.full_name, profile?.parent_id, profile?.role, showToast, subscription, user?.email, user?.id]);
+
+  const initiatePayment = useCallback(async (method: 'stripe' | 'paypal') => {
+    if (!selectedPlan || !subscription) return;
+
+    setPaymentInProgress(true);
+    setActivePaymentProvider(method);
+
+    try {
+      const successUrl = new URL(window.location.href);
+      successUrl.searchParams.set('payment_status', 'success');
+      successUrl.searchParams.set('provider', method);
+
+      const cancelUrl = new URL(window.location.href);
+      cancelUrl.searchParams.set('payment_status', 'cancel');
+      cancelUrl.searchParams.set('provider', method);
+
+      const baseOptions = {
+        planId: selectedPlan.id,
+        childrenCount: effectiveChildrenCount,
+        successUrl: successUrl.toString(),
+        cancelUrl: cancelUrl.toString(),
+      };
+
+      if (method === 'stripe') {
+        const response = await createStripeCheckout(baseOptions);
+
+        localStorage.setItem('pendingUpgrade', JSON.stringify({
+          planId: selectedPlan.id,
+          method,
+          sessionId: response.sessionId,
+          billedChildren: response.billedChildren,
+        }));
+
+        window.location.href = response.url;
+      } else {
+        const response = await createPaypalOrder(baseOptions);
+
+        localStorage.setItem('pendingUpgrade', JSON.stringify({
+          planId: selectedPlan.id,
+          method,
+          orderId: response.orderId,
+          billedChildren: response.billedChildren,
+        }));
+
+        window.location.href = response.approvalUrl;
+      }
+    } catch (error: unknown) {
+      console.error('Payment initiation error:', error);
+      const message = error instanceof Error ? error.message : 'Impossible de lancer le paiement';
+      showToast(message, 'error');
+      setPaymentInProgress(false);
+      setActivePaymentProvider(null);
+    }
+  }, [effectiveChildrenCount, selectedPlan, showToast, subscription]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment_status');
+    const provider = params.get('provider') as 'stripe' | 'paypal' | null;
+    const sessionId = params.get('session_id') || undefined;
+    const orderId = params.get('token') || undefined;
+
+    if (paymentStatus) {
+      const pendingRaw = localStorage.getItem('pendingUpgrade');
+      if (paymentStatus === 'success' && provider && pendingRaw) {
+        try {
+          const pending = JSON.parse(pendingRaw) as PendingUpgradePayload;
+          setPaymentInProgress(false);
+          setActivePaymentProvider(null);
+          setPendingFinalization({
+            method: provider,
+            planId: pending.planId,
+            sessionId: sessionId ?? pending.sessionId,
+            orderId: orderId ?? pending.orderId,
+            billedChildren: pending.billedChildren,
+          });
+        } catch (error) {
+          console.error('Failed to parse pending upgrade data:', error);
+        }
+      } else if (paymentStatus === 'cancel') {
+        showToast('Paiement annulé.', 'warning');
+        localStorage.removeItem('pendingUpgrade');
+        setPaymentInProgress(false);
+        setActivePaymentProvider(null);
+      }
+
+      params.delete('payment_status');
+      params.delete('provider');
+      params.delete('session_id');
+      params.delete('token');
+      const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!pendingFinalization) return;
+
+    const plan = PLANS.find((p) => p.id === pendingFinalization.planId);
+    if (!plan) {
+      console.error('Pending plan not found');
+      localStorage.removeItem('pendingUpgrade');
+      setPendingFinalization(null);
+      setPaymentInProgress(false);
+      setActivePaymentProvider(null);
+      return;
+    }
+
+    setSelectedPlan(plan);
+    finalizeUpgrade(plan, pendingFinalization.method, {
+      billedChildren: pendingFinalization.billedChildren,
+      sessionId: pendingFinalization.sessionId,
+      orderId: pendingFinalization.orderId,
+    });
+  }, [finalizeUpgrade, pendingFinalization]);
 
   if (confirming && selectedPlan) {
     const nextPlanPrice = selectedPlanPrice ?? computePlanPrice(
@@ -380,22 +594,64 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <button
-                onClick={() => setConfirming(false)}
-                disabled={loading}
-                className="flex-1 py-4 border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:border-gray-400 transition disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleUpgrade}
-                disabled={loading}
-                className="flex-1 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition disabled:opacity-50 shadow-lg"
-              >
-                {loading ? 'Mise à jour...' : 'Confirmer le changement'}
-              </button>
-            </div>
+            {requiresPayment ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl text-purple-800 text-sm">
+                  <p className="font-semibold mb-1">Paiement requis</p>
+                  <p>
+                    Choisissez votre moyen de paiement sécurisé pour finaliser la mise à jour de votre abonnement.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => initiatePayment('stripe')}
+                    disabled={paymentInProgress || loading}
+                    className="flex items-center justify-center gap-2 py-4 bg-black text-white font-semibold rounded-xl hover:bg-gray-900 transition disabled:opacity-60"
+                  >
+                    {paymentInProgress && activePaymentProvider === 'stripe'
+                      ? 'Redirection vers Stripe...'
+                      : 'Payer par carte bancaire'}
+                  </button>
+                  <button
+                    onClick={() => initiatePayment('paypal')}
+                    disabled={paymentInProgress || loading}
+                    className="flex items-center justify-center gap-2 py-4 bg-[#FFC439] text-gray-900 font-semibold rounded-xl hover:bg-[#f7b500] transition disabled:opacity-60"
+                  >
+                    {paymentInProgress && activePaymentProvider === 'paypal'
+                      ? 'Redirection vers PayPal...'
+                      : 'Payer avec PayPal'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    setConfirming(false);
+                    setPaymentInProgress(false);
+                    setActivePaymentProvider(null);
+                  }}
+                  disabled={loading}
+                  className="w-full py-4 border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:border-gray-400 transition disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setConfirming(false)}
+                  disabled={loading}
+                  className="flex-1 py-4 border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:border-gray-400 transition disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => finalizeUpgrade(selectedPlan, 'manual')}
+                  disabled={loading}
+                  className="flex-1 py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition disabled:opacity-50 shadow-lg"
+                >
+                  {loading ? 'Mise à jour...' : 'Confirmer le changement'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
