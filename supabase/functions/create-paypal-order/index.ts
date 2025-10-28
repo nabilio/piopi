@@ -82,7 +82,13 @@ Deno.serve(async (req) => {
   try {
     const paypalClientId = Deno.env.get('PAYPAL_CLIENT_ID');
     const paypalClientSecret = Deno.env.get('PAYPAL_CLIENT_SECRET');
-    const paypalBaseUrl = Deno.env.get('PAYPAL_API_BASE') ?? 'https://api-m.paypal.com';
+    const explicitPaypalBaseUrl = Deno.env.get('PAYPAL_API_BASE');
+    const paypalEnvironment = (Deno.env.get('PAYPAL_ENVIRONMENT') ?? 'sandbox').toLowerCase();
+
+    const paypalBaseUrl = explicitPaypalBaseUrl
+      ?? (paypalEnvironment === 'live' || paypalEnvironment === 'production'
+        ? 'https://api-m.paypal.com'
+        : 'https://api-m.sandbox.paypal.com');
 
     if (!paypalClientId || !paypalClientSecret) {
       throw new Error('PayPal credentials not configured');
@@ -155,7 +161,7 @@ Deno.serve(async (req) => {
 
     if (!orderResponse.ok) {
       const errorText = await orderResponse.text();
-      throw new Error(`PayPal order creation failed: ${errorText}`);
+      throw new Error(`PayPal order creation failed (${paypalBaseUrl}): ${errorText}`);
     }
 
     const orderData: {
