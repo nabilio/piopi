@@ -610,7 +610,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                   >
                     {paymentInProgress && activePaymentProvider === 'stripe'
                       ? 'Redirection vers Stripe...'
-                      : 'Payer avec Stripe'}
+                      : 'Payer par carte bancaire'}
                   </button>
                   <button
                     onClick={() => initiatePayment('paypal')}
