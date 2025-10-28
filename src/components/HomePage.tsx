@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { BookOpen, Trophy, Plus, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2 } from 'lucide-react';
+import { BookOpen, Trophy, Plus, Sword, Swords, User, Book, Sparkles, Bot, BookPlus, Palette, Share2, QrCode } from 'lucide-react';
 import { supabase, Subject, Profile } from '../lib/supabase';
 import { SubjectCard } from './SubjectCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,8 @@ import { Logo } from './Logo';
 import { StoriesLibrary } from './StoriesLibrary';
 import { CustomLessonsChild } from './CustomLessonsChild';
 import { BirthdayNotificationCard } from './BirthdayNotificationCard';
+import { DrawingStudioModal } from './DrawingStudioModal';
+import { ChildLoginQRCodeModal } from './ChildLoginQRCodeModal';
 
 type HomePageProps = {
   onSubjectSelect: (subject: Subject) => void;
@@ -103,6 +105,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const { totalPoints } = useGamification();
   const [children, setChildren] = useState<Profile[]>([]);
   const [selectedChild, setSelectedChild] = useState<Profile | null>(null);
+  const [qrChild, setQrChild] = useState<Profile | null>(null);
   const [loadingChildren, setLoadingChildren] = useState(false);
   const [childPoints, setChildPoints] = useState(0);
   const [activeBattlesCount, setActiveBattlesCount] = useState(0);
@@ -120,7 +123,7 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
   const [showDrawingStudio, setShowDrawingStudio] = useState(false);
   const [drawingStats, setDrawingStats] = useState({ total: 0, shared: 0 });
 
-  const currentChildId = selectedChild?.id || profile?.id || null;
+  const currentChildId = selectedChild?.id || profile?.id || user?.id || null;
 
   const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
@@ -616,24 +619,36 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
             ) : (
               <div className="space-y-4">
                 {children.map((child) => (
-                  <button
-                    key={child.id}
-                    onClick={() => setSelectedChild(child)}
-                    className="w-full bg-white hover:bg-gray-50 rounded-2xl shadow-lg p-6 transition text-left flex items-center gap-4 group"
-                  >
-                    <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white text-2xl font-bold group-hover:scale-110 transition">
-                      {child.full_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-800 group-hover:text-blue-600 transition">
-                        {child.full_name}
-                      </h3>
-                      <p className="text-gray-600">{child.age} ans{child.grade_level ? ` • ${child.grade_level}` : ''}</p>
-                    </div>
-                    <div className="text-blue-500 group-hover:translate-x-2 transition">
-                      →
-                    </div>
-                  </button>
+                  <div key={child.id} className="relative">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setQrChild(child);
+                      }}
+                      className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-purple-50 p-2 text-purple-600 shadow-sm transition hover:bg-purple-100 hover:text-purple-700"
+                      aria-label={`Afficher le QR code de connexion pour ${child.full_name}`}
+                    >
+                      <QrCode size={18} />
+                    </button>
+                    <button
+                      onClick={() => setSelectedChild(child)}
+                      className="group flex w-full items-center gap-4 rounded-2xl bg-white p-6 text-left shadow-lg transition hover:bg-gray-50"
+                    >
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-purple-400 to-pink-400 text-2xl font-bold text-white transition group-hover:scale-110">
+                        {child.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-800 transition group-hover:text-blue-600">
+                          {child.full_name}
+                        </h3>
+                        <p className="text-gray-600">{child.age} ans{child.grade_level ? ` • ${child.grade_level}` : ''}</p>
+                      </div>
+                      <div className="text-blue-500 transition group-hover:translate-x-2">
+                        →
+                      </div>
+                    </button>
+                  </div>
                 ))}
 
                 {!showAddChild ? (
@@ -709,10 +724,16 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
               </div>
             )}
           </div>
-        </div>
       </div>
-    );
-  }
+      {qrChild ? (
+        <ChildLoginQRCodeModal
+          child={qrChild}
+          onClose={() => setQrChild(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
   if (showCustomLessons) {
     return <CustomLessonsChild childId={currentChildId ?? undefined} onClose={() => setShowCustomLessons(false)} />;
@@ -1025,6 +1046,14 @@ export function HomePage({ onSubjectSelect, onCoachClick, onProfileClick, onAvat
         )}
 
       </div>
+
+      {showDrawingStudio && currentChildId ? (
+        <DrawingStudioModal
+          childId={currentChildId}
+          onClose={() => setShowDrawingStudio(false)}
+          onUpdated={setDrawingStats}
+        />
+      ) : null}
     </div>
   );
 }
