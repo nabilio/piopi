@@ -28,8 +28,29 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
   const [shared, setShared] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+
+    const hasFinePointer = window.matchMedia ? window.matchMedia('(pointer: fine)').matches : false;
+    const previousCursor = document.body.style.cursor;
+    let shouldRestoreCursor = false;
+
+    if (hasFinePointer) {
+      document.body.style.cursor = 'none';
+      shouldRestoreCursor = true;
+    }
+
+    return () => {
+      if (shouldRestoreCursor) {
+        document.body.style.cursor = previousCursor;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const paragraphs = story.content.split('\n\n').filter(p => p.trim());
-    const wordsPerPage = 50;
+    const wordsPerPage = 12;
     const newPages: string[] = [];
     let currentPageContent = '';
     let wordCount = 0;
@@ -104,7 +125,10 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 z-50 overflow-hidden">
+    <div
+      className="fixed inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 z-50 overflow-hidden flex flex-col"
+      style={{ minHeight: '100dvh' }}
+    >
       <button
         onClick={onClose}
         className="absolute top-6 right-6 z-10 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition-all"
@@ -113,7 +137,7 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
       </button>
 
       <div className="h-full flex items-center justify-center p-4 md:p-8">
-        <div className="max-w-4xl w-full h-full flex flex-col">
+        <div className="max-w-5xl w-full h-full flex flex-col">
           <div className="text-center mb-6">
             <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg mb-4">
               <BookOpen size={24} className="text-amber-600" />
@@ -123,11 +147,11 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             </div>
 
             {isLastPage && (
-              <div className="flex justify-center items-center gap-4 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 animate-fadeIn w-full sm:w-auto">
                 <button
                   onClick={handleShare}
                   disabled={sharing || shared}
-                  className={`relative flex items-center gap-2 font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed ${
+                  className={`relative flex items-center justify-center gap-2 font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all disabled:cursor-not-allowed w-full sm:w-auto ${
                     shared
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
                       : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
@@ -139,14 +163,14 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
                 {onStartQuiz && (
                   <button
                     onClick={onStartQuiz}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                   >
                     Commencer le quiz 🎯
                   </button>
                 )}
                 <button
                   onClick={onClose}
-                  className="flex items-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-lg px-6 py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white font-bold text-base sm:text-lg px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-xl hover:shadow-2xl hover:scale-105 transition-all w-full sm:w-auto"
                 >
                   <ArrowLeft size={24} />
                   Retour
@@ -155,26 +179,26 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             )}
           </div>
 
-          <div className="flex-1 flex items-center justify-center gap-4">
+          <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-4 w-full">
             <button
               onClick={prevPage}
               disabled={currentPage === 0}
-              className="p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="hidden md:flex p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft size={32} className="text-gray-700" />
             </button>
 
-            <div className="flex-1 max-w-2xl aspect-square flex items-center">
-              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-8 md:p-12 w-full h-full flex flex-col relative overflow-hidden">
+            <div className="w-full md:flex-1 md:max-w-3xl flex items-center">
+              <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 w-full min-h-[15vh] md:min-h-0 md:h-full flex flex-col relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400" />
 
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-gray-900 leading-relaxed whitespace-pre-wrap font-bold text-2xl md:text-3xl text-center">
+                <div className="flex-1 flex items-center justify-center overflow-y-auto px-1 sm:px-2">
+                  <div className="text-gray-900 leading-relaxed whitespace-pre-wrap font-bold text-lg sm:text-xl md:text-2xl text-center">
                     {pages[currentPage]}
                   </div>
                 </div>
 
-                <div className="absolute bottom-6 right-8 text-sm font-semibold text-gray-400">
+                <div className="hidden md:block absolute bottom-6 right-8 text-sm font-semibold text-gray-400">
                   Page {currentPage + 1} / {pages.length}
                 </div>
               </div>
@@ -183,10 +207,34 @@ export function StoryReader({ story, onClose, onStartQuiz }: StoryReaderProps) {
             <button
               onClick={nextPage}
               disabled={isLastPage}
-              className="p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="hidden md:flex p-4 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <ChevronRight size={32} className="text-gray-700" />
             </button>
+
+            <div className="flex md:hidden items-center justify-between gap-4 w-full mt-4">
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 0}
+                className="flex-1 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                <ChevronLeft size={24} className="text-gray-700" />
+                <span className="font-semibold">Précédent</span>
+              </button>
+
+              <div className="text-sm font-semibold text-gray-500 whitespace-nowrap">
+                Page {currentPage + 1} / {pages.length}
+              </div>
+
+              <button
+                onClick={nextPage}
+                disabled={isLastPage}
+                className="flex-1 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              >
+                <span className="font-semibold">Suivant</span>
+                <ChevronRight size={24} className="text-gray-700" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
