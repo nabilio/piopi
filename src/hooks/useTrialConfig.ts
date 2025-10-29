@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type TrialConfig = {
   defaultDays: number;
@@ -34,6 +34,17 @@ export function useTrialConfig() {
 
   useEffect(() => {
     let isMounted = true;
+
+    if (!isSupabaseConfigured) {
+      setTrialConfig({
+        defaultDays: 30,
+        active: false,
+        days: 30,
+      });
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     async function fetchTrialSettings() {
       try {

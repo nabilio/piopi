@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
@@ -17,16 +17,6 @@ const PRICING_PLANS: PricingPlan[] = [
   { children: 5, monthlyPrice: 8.00, yearlyPrice: 80.00 },
 ];
 
-type TrialConfig = {
-  defaultDays: number;
-  active: boolean;
-  days: number;
-  name?: string | null;
-  description?: string | null;
-  startsAt?: string | null;
-  endsAt?: string | null;
-};
-
 type PlanSelectionProps = {
   onComplete: () => void;
 };
@@ -39,70 +29,11 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [error, setError] = useState('');
   const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
-  const [trialConfig, setTrialConfig] = useState<TrialConfig | null>(null);
+  const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline, activeDescription } = useTrialConfig();
 
   const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
   const pricePerChild = price / selectedChildren;
-
-  useEffect(() => {
-    async function fetchTrialSettings() {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('default_trial_days, trial_promo_active, trial_promo_days, trial_promo_name, trial_promo_description, trial_promo_starts_at, trial_promo_ends_at')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (data) {
-          const now = new Date();
-          const startsAt = data.trial_promo_starts_at ? new Date(data.trial_promo_starts_at) : null;
-          const endsAt = data.trial_promo_ends_at ? new Date(data.trial_promo_ends_at) : null;
-          const promoActive = Boolean(
-            data.trial_promo_active &&
-            (!startsAt || startsAt <= now) &&
-            (!endsAt || endsAt >= now)
-          );
-
-          const defaultDays = data.default_trial_days ?? 30;
-          const promoDays = data.trial_promo_days ?? defaultDays;
-
-          setTrialConfig({
-            defaultDays,
-            active: promoActive,
-            days: promoActive ? promoDays : defaultDays,
-            name: data.trial_promo_name,
-            description: data.trial_promo_description,
-            startsAt: data.trial_promo_starts_at,
-            endsAt: data.trial_promo_ends_at,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to load trial settings:', err);
-      }
-    }
-
-    fetchTrialSettings();
-  }, []);
-
-  function formatTrialDuration(days: number) {
-    if (days % 30 === 0) {
-      const months = Math.floor(days / 30);
-      if (months <= 1) {
-        return "1 mois";
-      }
-      return `${months} mois`;
-    }
-    return `${days} jours`;
-  }
-
-  const baseTrialDays = useMemo(() => {
-    if (!trialConfig) return 30;
-    return trialConfig.active ? trialConfig.days : trialConfig.defaultDays;
-  }, [trialConfig]);
 
   const promoExtraDays = useMemo(() => {
     if (!promoValidation?.valid) return 0;
@@ -110,11 +41,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   }, [promoValidation]);
 
   const totalTrialDays = baseTrialDays + promoExtraDays;
-  const formattedBaseTrial = formatTrialDuration(baseTrialDays);
   const formattedTotalTrial = formatTrialDuration(totalTrialDays);
-  const trialHeadline = trialConfig?.active && trialConfig.name
-    ? trialConfig.name
-    : `${formattedBaseTrial} d'essai gratuit`;
   const summaryTrialLabel = promoValidation?.valid ? formattedTotalTrial : formattedBaseTrial;
   const firstChargeDate = useMemo(() => {
     const date = new Date();
@@ -241,8 +168,8 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
           <p className="text-xl text-gray-600 mb-2">
             Commencez avec <span className="font-bold text-green-600">{trialHeadline}</span>
           </p>
-          {trialConfig?.active && trialConfig.description && (
-            <p className="text-base text-gray-500 mb-1">{trialConfig.description}</p>
+          {activeDescription && (
+            <p className="text-base text-gray-500 mb-1">{activeDescription}</p>
           )}
           <p className="text-base text-gray-500">
             Annulez à tout moment sans engagement • Aucun paiement pendant l'essai

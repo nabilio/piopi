@@ -1,24 +1,44 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+function createMissingConfigError(property?: string) {
+  const detail = property ? ` (property: ${String(property)})` : '';
+  return new Error(
+    `Supabase configuration is missing${detail}. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set before using Supabase.`
+  );
+}
+
+function createStubClient(): SupabaseClient {
+  return new Proxy({} as SupabaseClient, {
+    get(_target, prop) {
+      throw createMissingConfigError(prop);
+    },
+  });
+}
+
+if (!isSupabaseConfigured) {
   console.error('Missing Supabase environment variables:');
   console.error('VITE_SUPABASE_URL:', supabaseUrl);
   console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Present' : 'Missing');
-  throw new Error('Supabase configuration is missing. Please check your .env file and restart the dev server.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+const clientOptions = {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storageKey: 'ecole-magique-auth',
-    storage: window.localStorage
-  }
-});
+    ...(typeof window !== 'undefined' ? { storage: window.localStorage } : {}),
+  },
+} satisfies Parameters<typeof createClient>[2];
+
+export const supabase: SupabaseClient = isSupabaseConfigured
+  ? createClient(supabaseUrl!, supabaseAnonKey!, clientOptions)
+  : createStubClient();
 
 export type Profile = {
   id: string;
