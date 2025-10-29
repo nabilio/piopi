@@ -86,7 +86,8 @@ Deno.serve(async (req: Request) => {
     const { data: settingsData, error: settingsError } = await supabase
       .from('app_settings')
       .select('default_trial_days, trial_promo_active, trial_promo_days, trial_promo_starts_at, trial_promo_ends_at')
-      .eq('id', '00000000-0000-0000-0000-000000000001')
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (settingsError) {
