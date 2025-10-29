@@ -339,7 +339,8 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
               Aujourd'hui, vous payez <span className="font-bold">0,00 €</span>.
             </p>
             <p className="text-sm text-blue-800">
-              Après <span className="font-bold">7 jours</span>, si vous n'annulez pas votre essai, le montant de{' '}
+              Après votre essai gratuit de{' '}
+              <span className="font-bold">{summaryTrialLabel}</span>, si vous n'annulez pas votre essai, le montant de{' '}
               <span className="font-bold">{price.toFixed(2)} €</span> sera prélevé automatiquement.
             </p>
             <p className="text-xs text-blue-700">
@@ -546,8 +547,8 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 max-w-2xl mx-auto">
             <p className="text-sm text-yellow-800 font-semibold mb-2">Rappel important :</p>
             <ul className="text-sm text-yellow-700 space-y-1 text-left">
-              <li>✓ Aucune carte bancaire demandée pendant l'essai</li>
-              <li>✓ Annulation possible à tout moment</li>
+              <li>✓ Ajoutez dès maintenant votre moyen de paiement sécurisé</li>
+              <li>✓ Annulation possible à tout moment pendant l'essai</li>
               <li>✓ Suivi personnalisé pour chaque enfant</li>
             </ul>
           </div>
