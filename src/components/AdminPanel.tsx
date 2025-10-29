@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Save, Trash2, X, BookOpen, Users, Settings, UserPlus, Ban, Sparkles, LayoutDashboard, FileText, GraduationCap, Search, MessageCircle, FileCode, Eye, Zap, Edit, Smile } from 'lucide-react';
+import { Plus, Save, Trash2, X, BookOpen, Users, Settings, UserPlus, Ban, Sparkles, LayoutDashboard, FileText, GraduationCap, Search, MessageCircle, FileCode, Eye, Zap, Edit, Smile, Gift, Tag, CalendarClock, CalendarCheck2, CalendarX2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { AIContentGenerator } from './AIContentGenerator';
 import { GenerationProgress } from './GenerationProgress';
@@ -50,6 +50,34 @@ type QuizContent = {
   questions: Question[];
 };
 
+type PromoCode = {
+  code: string;
+  description: string;
+  free_months: number;
+  max_uses: number | null;
+  current_uses: number;
+  valid_from: string;
+  valid_until: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+type AppSettings = {
+  id: string;
+  logo_url: string | null;
+  app_name: string;
+  support_email: string;
+  created_at?: string;
+  updated_at?: string;
+  default_trial_days: number;
+  trial_promo_active: boolean;
+  trial_promo_days: number | null;
+  trial_promo_name: string | null;
+  trial_promo_description: string | null;
+  trial_promo_starts_at: string | null;
+  trial_promo_ends_at: string | null;
+};
+
 type Profile = {
   id: string;
   email: string;
@@ -67,7 +95,7 @@ type Profile = {
 
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
-type AdminView = 'dashboard' | 'levels' | 'quiz' | 'lessons' | 'users' | 'activities' | 'ai-generator' | 'settings' | 'subjects-manager' | 'lessons-manager' | 'quiz-manager' | 'coach-test' | 'prompts' | 'student-simulator' | 'custom-statuses';
+type AdminView = 'dashboard' | 'levels' | 'quiz' | 'lessons' | 'users' | 'activities' | 'ai-generator' | 'settings' | 'subjects-manager' | 'lessons-manager' | 'quiz-manager' | 'coach-test' | 'prompts' | 'student-simulator' | 'custom-statuses' | 'promotions';
 
 export function AdminPanel() {
   const [currentView, setCurrentView] = useState<AdminView>('dashboard');
@@ -144,12 +172,47 @@ export function AdminPanel() {
     content: '',
   });
 
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [defaultTrialDays, setDefaultTrialDays] = useState<number>(30);
+  const [trialPromoForm, setTrialPromoForm] = useState({
+    active: false,
+    name: '',
+    description: '',
+    days: 7,
+    startDate: '',
+    endDate: '',
+  });
+  const [promoForm, setPromoForm] = useState({
+    code: '',
+    description: '',
+    freeMonths: 1,
+    maxUses: '',
+    validFrom: '',
+    validUntil: '',
+    active: true,
+  });
+
   useEffect(() => {
     loadData();
     if (currentView === 'dashboard') {
       checkOngoingGeneration();
     }
   }, [currentView]);
+
+  useEffect(() => {
+    if (appSettings) {
+      setDefaultTrialDays(appSettings.default_trial_days ?? 30);
+      setTrialPromoForm({
+        active: appSettings.trial_promo_active ?? false,
+        name: appSettings.trial_promo_name || '',
+        description: appSettings.trial_promo_description || '',
+        days: appSettings.trial_promo_days ?? appSettings.default_trial_days ?? 30,
+        startDate: appSettings.trial_promo_starts_at ? appSettings.trial_promo_starts_at.substring(0, 10) : '',
+        endDate: appSettings.trial_promo_ends_at ? appSettings.trial_promo_ends_at.substring(0, 10) : '',
+      });
+    }
+  }, [appSettings]);
 
   function showConfirm(title: string, message: string, onConfirm: () => void, variant: 'danger' | 'warning' | 'info' = 'warning') {
     setConfirmDialog({
@@ -471,6 +534,37 @@ export function AdminPanel() {
         setMessage('Erreur lors du chargement des utilisateurs: ' + error.message);
       }
     }
+
+    if (currentView === 'promotions' || currentView === 'settings') {
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('id', '00000000-0000-0000-0000-000000000001')
+        .maybeSingle();
+
+      if (settingsError) {
+        console.error('Erreur chargement paramètres applicatifs:', settingsError);
+      }
+
+      if (settingsData) {
+        setAppSettings(settingsData as AppSettings);
+      }
+    }
+
+    if (currentView === 'promotions') {
+      const { data: promoData, error: promoError } = await supabase
+        .from('promo_codes')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (promoError) {
+        console.error('Erreur chargement codes promo:', promoError);
+      }
+
+      if (promoData) {
+        setPromoCodes(promoData as PromoCode[]);
+      }
+    }
   }
 
   async function handleCreateChapter() {
@@ -549,6 +643,130 @@ export function AdminPanel() {
       await loadData();
     } catch (error: any) {
       setMessage('Erreur: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function parseDateInput(value: string, endOfDay = false) {
+    if (!value) return null;
+    const time = endOfDay ? '23:59:59' : '00:00:00';
+    const date = new Date(`${value}T${time}Z`);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString();
+  }
+
+  async function handleSaveTrialSettings() {
+    if (!Number.isFinite(defaultTrialDays) || defaultTrialDays <= 0) {
+      setMessage('La durée d\'essai par défaut doit être un nombre de jours positif');
+      return;
+    }
+
+    if (trialPromoForm.active && (!trialPromoForm.days || trialPromoForm.days <= 0)) {
+      setMessage('La durée de la promotion doit être supérieure à 0 jour');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const updates: Partial<AppSettings> & { updated_at: string; default_trial_days: number } = {
+        default_trial_days: Math.round(defaultTrialDays),
+        trial_promo_active: trialPromoForm.active,
+        trial_promo_days: trialPromoForm.active ? Math.round(trialPromoForm.days) : null,
+        trial_promo_name: trialPromoForm.active ? (trialPromoForm.name.trim() || null) : null,
+        trial_promo_description: trialPromoForm.active ? (trialPromoForm.description.trim() || null) : null,
+        trial_promo_starts_at: trialPromoForm.active ? parseDateInput(trialPromoForm.startDate) : null,
+        trial_promo_ends_at: trialPromoForm.active ? parseDateInput(trialPromoForm.endDate, true) : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('app_settings')
+        .update(updates)
+        .eq('id', '00000000-0000-0000-0000-000000000001');
+
+      if (error) throw error;
+
+      setMessage('Paramètres d\'essai mis à jour avec succès');
+      await loadData();
+    } catch (error: any) {
+      console.error('Erreur mise à jour paramètres essai:', error);
+      setMessage('Erreur: ' + (error.message || 'Mise à jour impossible'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreatePromoCode() {
+    if (!promoForm.code.trim() || !promoForm.description.trim()) {
+      setMessage('Le code et la description sont requis');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const insertData = {
+        code: promoForm.code.trim().toUpperCase(),
+        description: promoForm.description.trim(),
+        free_months: Math.max(0, Math.round(promoForm.freeMonths)),
+        max_uses: promoForm.maxUses ? Math.max(1, Math.round(Number(promoForm.maxUses))) : null,
+        valid_from: parseDateInput(promoForm.validFrom) ?? new Date().toISOString(),
+        valid_until: parseDateInput(promoForm.validUntil, true),
+        active: promoForm.active,
+      };
+
+      const { error } = await supabase.from('promo_codes').insert(insertData);
+
+      if (error) throw error;
+
+      setMessage('Code promo créé avec succès');
+      setPromoForm({ code: '', description: '', freeMonths: 1, maxUses: '', validFrom: '', validUntil: '', active: true });
+      await loadData();
+    } catch (error: any) {
+      console.error('Erreur création code promo:', error);
+      setMessage('Erreur: ' + (error.message || 'Création du code promo impossible'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUpdatePromoCode(code: string, updates: Partial<PromoCode>) {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('promo_codes')
+        .update(updates)
+        .eq('code', code);
+
+      if (error) throw error;
+
+      await loadData();
+      setMessage(`Code ${code} mis à jour`);
+    } catch (error: any) {
+      console.error('Erreur mise à jour code promo:', error);
+      setMessage('Erreur: ' + (error.message || 'Mise à jour du code promo impossible'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeletePromoCode(code: string) {
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('promo_codes')
+        .delete()
+        .eq('code', code);
+
+      if (error) throw error;
+
+      setMessage(`Code ${code} supprimé avec succès`);
+      await loadData();
+    } catch (error: any) {
+      console.error('Erreur suppression code promo:', error);
+      setMessage('Erreur: ' + (error.message || 'Suppression du code promo impossible'));
     } finally {
       setLoading(false);
     }
@@ -1079,6 +1297,17 @@ export function AdminPanel() {
           >
             <FileCode size={20} />
             Prompts IA
+          </button>
+          <button
+            onClick={() => setCurrentView('promotions')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition ${
+              currentView === 'promotions'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Gift size={20} />
+            Promotions
           </button>
           <button
             onClick={() => setCurrentView('custom-statuses')}
@@ -3409,6 +3638,301 @@ export function AdminPanel() {
           <CustomStatusManager />
         )}
 
+        {currentView === 'promotions' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl p-6 space-y-6">
+              <div className="flex items-center gap-3">
+                <Gift className="text-purple-500" size={24} />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">Essais gratuits & promotions globales</h3>
+                  <p className="text-sm text-gray-600">
+                    Configurez la durée d&apos;essai par défaut et planifiez des périodes promotionnelles temporaires.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-4 bg-gray-50 rounded-xl space-y-4">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <CalendarCheck2 size={18} className="text-blue-500" />
+                    Essai gratuit par défaut
+                  </h4>
+                  <p className="text-sm text-gray-600">
+                    Nombre de jours offerts à chaque nouvelle inscription lorsque aucune promotion spéciale n&apos;est active.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      value={defaultTrialDays}
+                      onChange={(e) => setDefaultTrialDays(Number(e.target.value))}
+                      className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <span className="text-sm text-gray-600">jours</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                      <CalendarClock size={18} className="text-indigo-500" />
+                      Promotion temporaire
+                    </h4>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={trialPromoForm.active}
+                        onChange={(e) => setTrialPromoForm({ ...trialPromoForm, active: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    </label>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Lorsqu&apos;elle est activée, tous les nouveaux abonnements suivent cette durée d&apos;essai.
+                  </p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Nom de la promotion</label>
+                      <input
+                        type="text"
+                        value={trialPromoForm.name}
+                        onChange={(e) => setTrialPromoForm({ ...trialPromoForm, name: e.target.value })}
+                        placeholder="Ex: Lancement rentrée"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        disabled={!trialPromoForm.active}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+                      <textarea
+                        value={trialPromoForm.description}
+                        onChange={(e) => setTrialPromoForm({ ...trialPromoForm, description: e.target.value })}
+                        placeholder="Message promotionnel affiché aux familles"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        rows={3}
+                        disabled={!trialPromoForm.active}
+                      ></textarea>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Durée</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={trialPromoForm.days}
+                          onChange={(e) => setTrialPromoForm({ ...trialPromoForm, days: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          disabled={!trialPromoForm.active}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Début</label>
+                        <input
+                          type="date"
+                          value={trialPromoForm.startDate}
+                          onChange={(e) => setTrialPromoForm({ ...trialPromoForm, startDate: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          disabled={!trialPromoForm.active}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1">Fin</label>
+                        <input
+                          type="date"
+                          value={trialPromoForm.endDate}
+                          onChange={(e) => setTrialPromoForm({ ...trialPromoForm, endDate: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          disabled={!trialPromoForm.active}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveTrialSettings}
+                  disabled={loading}
+                  className="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Save size={18} />
+                  Sauvegarder les paramètres
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 space-y-6">
+              <div className="flex items-center gap-3">
+                <Tag className="text-green-500" size={24} />
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">Codes promo</h3>
+                  <p className="text-sm text-gray-600">
+                    Créez et gérez des codes offrant des mois gratuits supplémentaires.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-1 p-4 bg-gray-50 rounded-xl space-y-3">
+                  <h4 className="font-semibold text-gray-800">Nouveau code</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Code</label>
+                      <input
+                        type="text"
+                        value={promoForm.code}
+                        onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent uppercase"
+                        placeholder="EX: BIENVENUE"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+                      <textarea
+                        value={promoForm.description}
+                        onChange={(e) => setPromoForm({ ...promoForm, description: e.target.value })}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="Message qui sera montré aux parents"
+                      ></textarea>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Mois offerts</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={promoForm.freeMonths}
+                          onChange={(e) => setPromoForm({ ...promoForm, freeMonths: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Utilisations max.</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={promoForm.maxUses}
+                          onChange={(e) => setPromoForm({ ...promoForm, maxUses: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="Illimité"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Début</label>
+                        <input
+                          type="date"
+                          value={promoForm.validFrom}
+                          onChange={(e) => setPromoForm({ ...promoForm, validFrom: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Fin</label>
+                        <input
+                          type="date"
+                          value={promoForm.validUntil}
+                          onChange={(e) => setPromoForm({ ...promoForm, validUntil: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={promoForm.active}
+                        onChange={(e) => setPromoForm({ ...promoForm, active: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                      />
+                      Activer immédiatement
+                    </label>
+                    <button
+                      onClick={handleCreatePromoCode}
+                      disabled={loading}
+                      className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Plus size={18} />
+                      Créer le code
+                    </button>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-2 space-y-4">
+                  {promoCodes.length === 0 ? (
+                    <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-500">
+                      Aucun code promo pour le moment
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {promoCodes.map(code => {
+                        const now = new Date();
+                        const validUntil = code.valid_until ? new Date(code.valid_until) : null;
+                        const expired = validUntil ? validUntil < now : false;
+
+                        return (
+                          <div key={code.code} className="border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-lg tracking-wide uppercase">{code.code}</span>
+                                <span className={`px-2 py-1 text-xs rounded-full ${code.active && !expired ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {code.active && !expired ? 'Actif' : expired ? 'Expiré' : 'Inactif'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600">{code.description}</p>
+                              <div className="text-xs text-gray-500 flex flex-wrap gap-3">
+                                <span>{code.free_months} mois offerts</span>
+                                <span>
+                                  Utilisations : {code.current_uses}
+                                  {code.max_uses ? ` / ${code.max_uses}` : ' (illimité)'}
+                                </span>
+                                <span>
+                                  Valide du {new Date(code.valid_from).toLocaleDateString('fr-FR')}
+                                  {code.valid_until ? ` au ${new Date(code.valid_until).toLocaleDateString('fr-FR')}` : ''}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleUpdatePromoCode(code.code, { active: !code.active })}
+                                disabled={loading}
+                                className={`px-3 py-2 rounded-lg text-sm font-semibold transition ${code.active ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                              >
+                                {code.active ? 'Désactiver' : 'Activer'}
+                              </button>
+                              <button
+                                onClick={() =>
+                                  showConfirm(
+                                    'Supprimer le code promo',
+                                    `Voulez-vous vraiment supprimer le code ${code.code} ?`,
+                                    () => handleDeletePromoCode(code.code),
+                                    'danger'
+                                  )
+                                }
+                                disabled={loading}
+                                className="px-3 py-2 rounded-lg text-sm font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {currentView === 'settings' && (
           <div className="space-y-6">
             <div className="bg-white rounded-2xl p-6 space-y-4">
@@ -3470,6 +3994,7 @@ export function AdminPanel() {
                       placeholder="URL du logo personnalisé"
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       id="logoUrl"
+                      defaultValue={appSettings?.logo_url || ''}
                     />
                     <button
                       onClick={async () => {
@@ -3503,7 +4028,7 @@ export function AdminPanel() {
                     <input
                       type="text"
                       placeholder="Nom de l'application"
-                      defaultValue="PioPi"
+                      defaultValue={appSettings?.app_name || 'PioPi'}
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       id="appName"
                     />
@@ -3535,7 +4060,7 @@ export function AdminPanel() {
                     <input
                       type="email"
                       placeholder="Email de support"
-                      defaultValue="support@piopi.com"
+                      defaultValue={appSettings?.support_email || 'support@piopi.com'}
                       className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       id="supportEmail"
                     />
