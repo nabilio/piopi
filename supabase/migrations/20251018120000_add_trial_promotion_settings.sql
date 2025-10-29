@@ -1,16 +1,14 @@
-/*
-  # Add trial promotion configuration
-
-  1. New Columns
-    - Adds global trial configuration fields to the `app_settings` table
-      to allow admins to configure default trial duration and timed
-      promotions from the admin panel.
-
-  2. Policies
-    - Allow public (unauthenticated) read access to `app_settings` so the
-      marketing pages and registration flow can display accurate trial
-      information.
-*/
+-- Add trial promotion configuration
+--
+-- New columns
+-- - Adds global trial configuration fields to the `app_settings` table so
+--   admins can configure default trial duration and timed promotions from
+--   the admin panel.
+--
+-- Policies
+-- - Allow public (unauthenticated) read access to `app_settings` so the
+--   marketing pages and registration flow can display accurate trial
+--   information.
 
 ALTER TABLE app_settings
   ADD COLUMN IF NOT EXISTS default_trial_days integer NOT NULL DEFAULT 30,

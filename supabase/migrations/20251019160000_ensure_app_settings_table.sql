@@ -1,42 +1,31 @@
-/*
-  # Ensure app settings infrastructure exists
+-- Ensure app settings infrastructure exists
+--
+-- Table setup
+-- - Create the `app_settings` table if it was missing and ensure all expected
+--   columns exist with sensible defaults.
+--
+-- Security
+-- - Enable RLS and ensure policies for admin updates and public/authenticated
+--   reads exist.
+--
+-- Seed data
+-- - Ensure a default settings row is present so the application can update it.
 
-  1. Table setup
-    - Create the `app_settings` table if it was missing.
-    - Make sure all expected columns exist with sensible defaults.
-
-  2. Security
-    - Enable RLS and ensure policies for admin updates and public/authenticated reads exist.
-
-  3. Seed data
-    - Ensure a default settings row is present so the application can update it.
-*/
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = 'public'
-      AND table_name = 'app_settings'
-  ) THEN
-    CREATE TABLE public.app_settings (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      logo_url text,
-      app_name text NOT NULL DEFAULT 'PioPi',
-      support_email text NOT NULL DEFAULT 'support@piopi.com',
-      default_trial_days integer NOT NULL DEFAULT 30,
-      trial_promo_active boolean NOT NULL DEFAULT false,
-      trial_promo_days integer,
-      trial_promo_name text,
-      trial_promo_description text,
-      trial_promo_starts_at timestamptz,
-      trial_promo_ends_at timestamptz,
-      created_at timestamptz DEFAULT now(),
-      updated_at timestamptz DEFAULT now()
-    );
-  END IF;
-END $$;
+CREATE TABLE IF NOT EXISTS app_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  logo_url text,
+  app_name text NOT NULL DEFAULT 'PioPi',
+  support_email text NOT NULL DEFAULT 'support@piopi.com',
+  default_trial_days integer NOT NULL DEFAULT 30,
+  trial_promo_active boolean NOT NULL DEFAULT false,
+  trial_promo_days integer,
+  trial_promo_name text,
+  trial_promo_description text,
+  trial_promo_starts_at timestamptz,
+  trial_promo_ends_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 
 ALTER TABLE app_settings
   ADD COLUMN IF NOT EXISTS logo_url text,
