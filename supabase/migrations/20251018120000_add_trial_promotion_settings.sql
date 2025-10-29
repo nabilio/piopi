@@ -19,13 +19,47 @@ BEGIN
       AND table_name = 'app_settings'
   ) THEN
     EXECUTE $$
-      ALTER TABLE app_settings
-        ADD COLUMN IF NOT EXISTS default_trial_days integer NOT NULL DEFAULT 30,
-        ADD COLUMN IF NOT EXISTS trial_promo_active boolean NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS trial_promo_days integer DEFAULT NULL,
-        ADD COLUMN IF NOT EXISTS trial_promo_name text,
-        ADD COLUMN IF NOT EXISTS trial_promo_description text,
-        ADD COLUMN IF NOT EXISTS trial_promo_starts_at timestamptz,
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS default_trial_days integer
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ALTER COLUMN default_trial_days SET DEFAULT 30
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS trial_promo_active boolean
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ALTER COLUMN trial_promo_active SET DEFAULT false
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS trial_promo_days integer
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS trial_promo_name text
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS trial_promo_description text
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ADD COLUMN IF NOT EXISTS trial_promo_starts_at timestamptz
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
         ADD COLUMN IF NOT EXISTS trial_promo_ends_at timestamptz
     $$;
 
@@ -34,6 +68,16 @@ BEGIN
       SET
         default_trial_days = COALESCE(default_trial_days, 30),
         trial_promo_active = COALESCE(trial_promo_active, false)
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ALTER COLUMN default_trial_days SET NOT NULL
+    $$;
+
+    EXECUTE $$
+      ALTER TABLE IF EXISTS app_settings
+        ALTER COLUMN trial_promo_active SET NOT NULL
     $$;
 
     IF NOT EXISTS (
