@@ -211,6 +211,16 @@ export function AdminPanel() {
         startDate: appSettings.trial_promo_starts_at ? appSettings.trial_promo_starts_at.substring(0, 10) : '',
         endDate: appSettings.trial_promo_ends_at ? appSettings.trial_promo_ends_at.substring(0, 10) : '',
       });
+    } else {
+      setDefaultTrialDays(30);
+      setTrialPromoForm({
+        active: false,
+        name: '',
+        description: '',
+        days: 30,
+        startDate: '',
+        endDate: '',
+      });
     }
   }, [appSettings]);
 
@@ -539,7 +549,8 @@ export function AdminPanel() {
       const { data: settingsData, error: settingsError } = await supabase
         .from('app_settings')
         .select('*')
-        .eq('id', '00000000-0000-0000-0000-000000000001')
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (settingsError) {
@@ -548,6 +559,8 @@ export function AdminPanel() {
 
       if (settingsData) {
         setAppSettings(settingsData as AppSettings);
+      } else {
+        setAppSettings(null);
       }
     }
 
@@ -4026,10 +4039,15 @@ export function AdminPanel() {
                     <button
                       onClick={async () => {
                         const url = (document.getElementById('logoUrl') as HTMLInputElement).value;
+                        const settingsId = appSettings?.id ?? '00000000-0000-0000-0000-000000000001';
+
                         const { error } = await supabase
                           .from('app_settings')
-                          .update({ logo_url: url || null, updated_at: new Date().toISOString() })
-                          .eq('id', '00000000-0000-0000-0000-000000000001');
+                          .upsert({
+                            id: settingsId,
+                            logo_url: url || null,
+                            updated_at: new Date().toISOString()
+                          }, { onConflict: 'id' });
 
                         if (error) {
                           alert('Erreur lors de la mise à jour du logo');
@@ -4062,10 +4080,15 @@ export function AdminPanel() {
                     <button
                       onClick={async () => {
                         const name = (document.getElementById('appName') as HTMLInputElement).value;
+                        const settingsId = appSettings?.id ?? '00000000-0000-0000-0000-000000000001';
+
                         const { error } = await supabase
                           .from('app_settings')
-                          .update({ app_name: name, updated_at: new Date().toISOString() })
-                          .eq('id', '00000000-0000-0000-0000-000000000001');
+                          .upsert({
+                            id: settingsId,
+                            app_name: name,
+                            updated_at: new Date().toISOString()
+                          }, { onConflict: 'id' });
 
                         if (error) {
                           alert('Erreur lors de la mise à jour du nom');
@@ -4094,10 +4117,15 @@ export function AdminPanel() {
                     <button
                       onClick={async () => {
                         const email = (document.getElementById('supportEmail') as HTMLInputElement).value;
+                        const settingsId = appSettings?.id ?? '00000000-0000-0000-0000-000000000001';
+
                         const { error } = await supabase
                           .from('app_settings')
-                          .update({ support_email: email, updated_at: new Date().toISOString() })
-                          .eq('id', '00000000-0000-0000-0000-000000000001');
+                          .upsert({
+                            id: settingsId,
+                            support_email: email,
+                            updated_at: new Date().toISOString()
+                          }, { onConflict: 'id' });
 
                         if (error) {
                           alert('Erreur lors de la mise à jour de l\'email');
