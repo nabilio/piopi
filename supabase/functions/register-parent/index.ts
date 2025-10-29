@@ -83,8 +83,36 @@ Deno.serve(async (req: Request) => {
       throw new Error('Failed to create user');
     }
 
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('app_settings')
+      .select('default_trial_days, trial_promo_active, trial_promo_days, trial_promo_starts_at, trial_promo_ends_at')
+      .eq('id', '00000000-0000-0000-0000-000000000001')
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('Failed to load app settings for trial configuration:', settingsError);
+    }
+
+    let baseTrialDays = 30;
+    if (settingsData) {
+      const now = new Date();
+      const startsAt = settingsData.trial_promo_starts_at ? new Date(settingsData.trial_promo_starts_at) : null;
+      const endsAt = settingsData.trial_promo_ends_at ? new Date(settingsData.trial_promo_ends_at) : null;
+      const promoActive = Boolean(
+        settingsData.trial_promo_active &&
+        (!startsAt || startsAt <= now) &&
+        (!endsAt || endsAt >= now)
+      );
+
+      baseTrialDays = promoActive
+        ? (settingsData.trial_promo_days ?? settingsData.default_trial_days ?? 30)
+        : (settingsData.default_trial_days ?? 30);
+    }
+
+    const totalTrialDays = baseTrialDays + (promoMonths || 0) * 30;
+
     const trialEndDate = new Date();
-    trialEndDate.setMonth(trialEndDate.getMonth() + 1);
+    trialEndDate.setDate(trialEndDate.getDate() + totalTrialDays);
 
     const { error: profileError } = await supabase
       .from('profiles')
@@ -110,6 +138,7 @@ Deno.serve(async (req: Request) => {
         children_count: selectedChildren,
         price,
         status: 'trial',
+        trial_start_date: new Date().toISOString(),
         trial_end_date: trialEndDate.toISOString(),
         promo_code: promoCode || null,
         promo_months_remaining: promoMonths || 0,
