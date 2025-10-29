@@ -6,6 +6,7 @@ import { EmailConfirmation } from './EmailConfirmation';
 import { Footer } from './Footer';
 import { CookieConsent } from './CookieConsent';
 import { Logo } from './Logo';
+import { useTrialConfig } from '../hooks/useTrialConfig';
 
 type SimpleRegistrationProps = {
   onSuccess: () => void;
@@ -27,6 +28,8 @@ export function SimpleRegistration({ onSuccess, onBackToLogin, onContactClick, o
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { promoHeadline } = useTrialConfig();
+  const trialBadgeLabel = promoHeadline;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -213,7 +216,7 @@ export function SimpleRegistration({ onSuccess, onBackToLogin, onContactClick, o
           </p>
           <div className="mt-4 flex justify-center gap-2">
             <div className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30 shadow-lg">
-              ✨ 1 mois gratuit
+              ✨ {trialBadgeLabel}
             </div>
             <div className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-bold border border-white/30 shadow-lg">
               🚀 Sans engagement
