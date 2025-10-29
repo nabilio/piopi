@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 
 type PricingPlan = {
   children: number;

@@ -3,6 +3,7 @@ import { Check, ArrowRight, Users, Mail, Lock, User, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmailConfirmation } from './EmailConfirmation';
 import { useAuth } from '../contexts/AuthContext';
+import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 
 type PricingPlan = {
   children: number;

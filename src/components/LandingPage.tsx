@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Sparkles, BookOpen, Users, Trophy, Rocket, Star, Award, Zap, Heart, Target, Brain, Globe, TrendingUp, Check, Euro, Mail, Lock, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
+import { useTrialConfig } from '../hooks/useTrialConfig';
 import { Footer } from './Footer';
 import { CookieConsent } from './CookieConsent';
 
@@ -24,6 +25,9 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const { formattedBaseTrial, promoHeadline, promoBanner } = useTrialConfig();
+  const heroTrialBadge = promoHeadline;
+  const trialFeatureLabel = formattedBaseTrial ? `Essai gratuit: ${formattedBaseTrial}` : 'Essai gratuit offert';
 
   useEffect(() => {
     // Check if user just confirmed their email
@@ -244,7 +248,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                 <div className="flex flex-wrap gap-4 mb-10 justify-center lg:justify-start">
                   <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-lg">
                     <Zap className="text-yellow-500" size={20} />
-                    <span className="font-semibold text-gray-700">1 mois gratuit pour 2 enfants</span>
+                    <span className="font-semibold text-gray-700">{heroTrialBadge}</span>
                   </div>
                   <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-lg">
                     <Target className="text-green-500" size={20} />
@@ -271,7 +275,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
               <div className="inline-block bg-green-100 text-green-700 px-6 py-3 rounded-full font-black text-lg mb-6 border-2 border-green-300">
-                1 mois gratuit pour les 2 premiers enfants - Sans carte bancaire - Sans engagement
+                {promoBanner}
               </div>
               <h2 className="text-5xl font-black text-gray-800 mb-4">
                 Tarification simple et transparente
@@ -353,7 +357,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700 font-semibold">1 mois gratuit offert</span>
+                    <span className="text-sm text-gray-700 font-semibold">{trialFeatureLabel}</span>
                   </li>
                 </ul>
                 <button
@@ -396,7 +400,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700 font-semibold">1 mois gratuit offert</span>
+                    <span className="text-sm text-gray-700 font-semibold">{trialFeatureLabel}</span>
                   </li>
                 </ul>
                 <button
@@ -443,7 +447,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700 font-semibold">1 mois gratuit offert</span>
+                    <span className="text-sm text-gray-700 font-semibold">{trialFeatureLabel}</span>
                   </li>
                 </ul>
                 <button
