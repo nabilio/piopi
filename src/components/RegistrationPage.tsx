@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Mail, Lock, User, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { EmailConfirmation } from './EmailConfirmation';
 import { useAuth } from '../contexts/AuthContext';
+import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 
 type PricingPlan = {
   children: number;
@@ -16,16 +17,6 @@ const PRICING_PLANS: PricingPlan[] = [
   { children: 3, monthlyPrice: 5.00, yearlyPrice: 50.00 },
   { children: 4, monthlyPrice: 6.00, yearlyPrice: 60.00 },
 ];
-
-type TrialConfig = {
-  defaultDays: number;
-  active: boolean;
-  days: number;
-  name?: string | null;
-  description?: string | null;
-  startsAt?: string | null;
-  endsAt?: string | null;
-};
 
 export function RegistrationPage({ onSuccess }: { onSuccess: () => void }) {
   const { signInWithGoogle } = useAuth();
@@ -44,69 +35,10 @@ export function RegistrationPage({ onSuccess }: { onSuccess: () => void }) {
   const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [trialConfig, setTrialConfig] = useState<TrialConfig | null>(null);
+  const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline } = useTrialConfig();
 
   const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
-
-  useEffect(() => {
-    async function fetchTrialSettings() {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('default_trial_days, trial_promo_active, trial_promo_days, trial_promo_name, trial_promo_description, trial_promo_starts_at, trial_promo_ends_at')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (data) {
-          const now = new Date();
-          const startsAt = data.trial_promo_starts_at ? new Date(data.trial_promo_starts_at) : null;
-          const endsAt = data.trial_promo_ends_at ? new Date(data.trial_promo_ends_at) : null;
-          const promoActive = Boolean(
-            data.trial_promo_active &&
-            (!startsAt || startsAt <= now) &&
-            (!endsAt || endsAt >= now)
-          );
-
-          const defaultDays = data.default_trial_days ?? 30;
-          const promoDays = data.trial_promo_days ?? defaultDays;
-
-          setTrialConfig({
-            defaultDays,
-            active: promoActive,
-            days: promoActive ? promoDays : defaultDays,
-            name: data.trial_promo_name,
-            description: data.trial_promo_description,
-            startsAt: data.trial_promo_starts_at,
-            endsAt: data.trial_promo_ends_at,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to load trial settings:', err);
-      }
-    }
-
-    fetchTrialSettings();
-  }, []);
-
-  function formatTrialDuration(days: number) {
-    if (days % 30 === 0) {
-      const months = Math.floor(days / 30);
-      if (months <= 1) {
-        return '1 mois';
-      }
-      return `${months} mois`;
-    }
-    return `${days} jours`;
-  }
-
-  const baseTrialDays = useMemo(() => {
-    if (!trialConfig) return 30;
-    return trialConfig.active ? trialConfig.days : trialConfig.defaultDays;
-  }, [trialConfig]);
 
   const promoExtraDays = useMemo(() => {
     if (!promoValidation?.valid) return 0;
@@ -114,11 +46,7 @@ export function RegistrationPage({ onSuccess }: { onSuccess: () => void }) {
   }, [promoValidation]);
 
   const totalTrialDays = baseTrialDays + promoExtraDays;
-  const formattedBaseTrial = formatTrialDuration(baseTrialDays);
   const formattedTotalTrial = formatTrialDuration(totalTrialDays);
-  const trialHeadline = trialConfig?.active && trialConfig.name
-    ? trialConfig.name
-    : `${formattedBaseTrial} d'essai gratuit`;
   const summaryTrialLabel = promoValidation?.valid ? formattedTotalTrial : formattedBaseTrial;
   const firstChargeDate = useMemo(() => {
     const date = new Date();
