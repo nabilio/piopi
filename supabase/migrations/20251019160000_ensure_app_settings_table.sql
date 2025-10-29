@@ -142,14 +142,22 @@ DECLARE
   single_id uuid;
   settings_count integer;
 BEGIN
-  SELECT COUNT(*), MIN(id)
-  INTO settings_count, single_id
+  SELECT COUNT(*)
+  INTO settings_count
   FROM app_settings;
 
-  IF settings_count = 1 AND single_id <> '00000000-0000-0000-0000-000000000001' THEN
-    UPDATE app_settings
-    SET id = '00000000-0000-0000-0000-000000000001'
-    WHERE id = single_id;
+  IF settings_count = 1 THEN
+    SELECT id
+    INTO single_id
+    FROM app_settings
+    ORDER BY created_at NULLS LAST, id
+    LIMIT 1;
+
+    IF single_id IS NOT NULL AND single_id <> '00000000-0000-0000-0000-000000000001' THEN
+      UPDATE app_settings
+      SET id = '00000000-0000-0000-0000-000000000001'
+      WHERE id = single_id;
+    END IF;
   END IF;
 END $$;
 
