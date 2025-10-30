@@ -363,6 +363,14 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
     window.history.replaceState({}, document.title, cleanUrl);
   }, [finalizeCheckout, trialConfigLoading]);
 
+  const stepOrder = useMemo<FlowStep[]>(
+    () =>
+      hasAccountStep
+        ? ['plan-selection', 'account', 'payment', 'confirmation']
+        : ['plan-selection', 'payment', 'confirmation'],
+    [hasAccountStep],
+  );
+
   if (trialConfigLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
@@ -428,14 +436,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
       setError(message);
     }
   }
-
-  const stepOrder = useMemo<FlowStep[]>(
-    () =>
-      hasAccountStep
-        ? ['plan-selection', 'account', 'payment', 'confirmation']
-        : ['plan-selection', 'payment', 'confirmation'],
-    [hasAccountStep],
-  );
 
   const currentStepIndex = stepOrder.indexOf(step);
 
