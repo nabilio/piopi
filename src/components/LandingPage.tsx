@@ -218,6 +218,12 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                     <p className="text-gray-700 text-lg font-semibold">
                       Besoin d'un compte ? Choisissez un forfait ci-dessous pour finaliser l'inscription.
                     </p>
+                    <button
+                      onClick={scrollToPricing}
+                      className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-black text-lg rounded-xl hover:from-green-600 hover:to-emerald-600 transition shadow-lg"
+                    >
+                      Voir les forfaits
+                    </button>
                   </div>
                 </div>
               </div>
