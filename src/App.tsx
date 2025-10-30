@@ -44,7 +44,6 @@ import { BattleArena } from './components/BattleArena';
 import { BattleResults } from './components/BattleResults';
 import { BattleHub } from './components/BattleHub';
 import { CoursesView } from './components/CoursesView';
-import { EmailConfirmed } from './components/EmailConfirmed';
 import { EmailConfirmedPage } from './components/EmailConfirmedPage';
 import { AddChildWithUpgrade } from './components/AddChildWithUpgrade';
 import { UpgradePlansPage } from './components/UpgradePlansPage';
@@ -137,17 +136,10 @@ function AppContent() {
   const [subscriptionRefreshTrigger, setSubscriptionRefreshTrigger] = useState(0);
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
   const [childBirthdaysChildId, setChildBirthdaysChildId] = useState<string | null>(null);
-  const [showEmailConfirmed, setShowEmailConfirmed] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'security' | 'notifications' | 'subscription' | 'children'>('profile');
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('emailConfirmed') === 'true') {
-      setShowEmailConfirmed(true);
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-
     const wantsReactivate = urlParams.get('reactivate') === 'true';
     const wantsSubscriptionSettings = urlParams.get('settings') === 'subscription';
 
@@ -204,7 +196,6 @@ function AppContent() {
     return <ChildQRLoginPage />;
   }
 
-
   useEffect(() => {
     if (!user) {
       setView('home');
@@ -224,10 +215,6 @@ function AppContent() {
       setView('home');
     }
   }, [user, profile, isViewingAsChild]);
-
-  if (showEmailConfirmed) {
-    return <EmailConfirmed />;
-  }
 
   if (loading) {
     return (
