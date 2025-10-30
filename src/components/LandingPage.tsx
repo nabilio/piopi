@@ -5,16 +5,17 @@ import { useToast } from '../hooks/useToast';
 import { useTrialConfig } from '../hooks/useTrialConfig';
 import { Footer } from './Footer';
 import { CookieConsent } from './CookieConsent';
+import type { PlanId } from './PlanSelection';
 
 type LandingPageProps = {
-  onRegisterClick: () => void;
+  onPlanSelect: (planId: PlanId) => void;
   onContactClick?: () => void;
   onTermsClick?: () => void;
   onPrivacyClick?: () => void;
   onLegalClick?: () => void;
 };
 
-export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onPrivacyClick, onLegalClick }: LandingPageProps) {
+export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPrivacyClick, onLegalClick }: LandingPageProps) {
   const { signInWithEmail, signInWithGoogle, resetPassword } = useAuth();
   const { showToast } = useToast();
   const [loginEmail, setLoginEmail] = useState('');
@@ -216,8 +217,14 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
 
                   <div className="mt-8 text-center">
                     <p className="text-gray-700 text-lg font-semibold">
-                      Besoin d'un compte ? Choisissez un forfait ci-dessous pour finaliser l'inscription.
+                      Besoin d'un compte ? Choisissez un forfait ci-dessous pour accéder directement au paiement sécurisé.
                     </p>
+                    <button
+                      onClick={scrollToPricing}
+                      className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-black text-lg rounded-xl hover:from-green-600 hover:to-emerald-600 transition shadow-lg"
+                    >
+                      Voir les forfaits
+                    </button>
                   </div>
                 </div>
               </div>
@@ -314,7 +321,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                 </ul>
                 <button
-                  onClick={onRegisterClick}
+                  onClick={() => onPlanSelect('basic')}
                   className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
                 >
                   Choisir
@@ -360,7 +367,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                 </ul>
                 <button
-                  onClick={onRegisterClick}
+                  onClick={() => onPlanSelect('duo')}
                   className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
                   Choisir
@@ -403,7 +410,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                 </ul>
                 <button
-                  onClick={onRegisterClick}
+                  onClick={() => onPlanSelect('family')}
                   className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
                 >
                   Choisir
@@ -450,7 +457,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                 </ul>
                 <button
-                  onClick={onRegisterClick}
+                  onClick={() => onPlanSelect('premium')}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
                   Choisir
@@ -501,7 +508,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </li>
                 </ul>
                 <button
-                  onClick={onRegisterClick}
+                  onClick={() => onPlanSelect('liberte')}
                   className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
                   Choisir

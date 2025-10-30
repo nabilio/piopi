@@ -24,7 +24,6 @@ import { NetworkPanel } from './components/NetworkPanel';
 import { Settings } from './components/Settings';
 import { UserExplorer } from './components/UserExplorer';
 import { LandingPage } from './components/LandingPage';
-import { SimpleRegistration } from './components/SimpleRegistration';
 import { ParentHome } from './components/ParentHome';
 import { ParentActivityFeed } from './components/ParentActivityFeed';
 import { ParentNotifications } from './components/ParentNotifications';
@@ -56,6 +55,7 @@ import { Subject, Activity } from './lib/supabase';
 import { supabase } from './lib/supabase';
 import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
+import { PlanSelection, type PlanId } from './components/PlanSelection';
 
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
@@ -122,7 +122,8 @@ function AppContent() {
   const [chaptersCount, setChaptersCount] = useState(0);
   const [activitiesCount, setActivitiesCount] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showRegistration, setShowRegistration] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutPlanId, setCheckoutPlanId] = useState<PlanId | null>(null);
   const [showAvatarCustomizer, setShowAvatarCustomizer] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isQuizActive, setIsQuizActive] = useState(false);
@@ -184,6 +185,8 @@ function AppContent() {
       setSelectedActivity(null);
       setShowAvatarCustomizer(false);
       setShowOnboarding(false);
+      setShowCheckout(false);
+      setCheckoutPlanId(null);
     } else if (profile?.role === 'admin' && profile?.onboarding_completed) {
       if (view === 'home') {
         setView('admin');
@@ -235,6 +238,23 @@ function AppContent() {
   }
 
   if (!user) {
+    if (showCheckout && checkoutPlanId) {
+      return (
+        <PlanSelection
+          initialStep="payment"
+          initialPlanId={checkoutPlanId}
+          onBack={() => {
+            setShowCheckout(false);
+            setCheckoutPlanId(null);
+          }}
+          onComplete={() => {
+            setShowCheckout(false);
+            setCheckoutPlanId(null);
+          }}
+        />
+      );
+    }
+
     if (view === 'contact') {
       return <ContactPage onBack={() => setView('home')} />;
     }
@@ -248,25 +268,13 @@ function AppContent() {
       return <LegalNoticePage onBack={() => setView('home')} />;
     }
 
-    if (showRegistration) {
-      return (
-        <SimpleRegistration
-          onSuccess={() => {
-            refreshProfile();
-          }}
-          onBackToLogin={() => setShowRegistration(false)}
-          onContactClick={() => setView('contact')}
-          onTermsClick={() => setView('terms')}
-          onPrivacyClick={() => setView('privacy')}
-          onLegalClick={() => setView('legal')}
-        />
-      );
-    }
-
     return (
       <>
         <LandingPage
-          onRegisterClick={() => setShowRegistration(true)}
+          onPlanSelect={(planId) => {
+            setCheckoutPlanId(planId);
+            setShowCheckout(true);
+          }}
           onContactClick={() => setView('contact')}
           onTermsClick={() => setView('terms')}
           onPrivacyClick={() => setView('privacy')}
