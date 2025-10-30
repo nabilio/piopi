@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
     if (authError) {
       if (authError.message.includes('already registered')) {
         const { data: { user }, error: getUserError } = await supabase.auth.admin.getUserByEmail(email);
-        
+
         if (getUserError || !user) {
           throw new Error('Erreur lors de la récupération de l\'utilisateur existant');
         }
@@ -69,7 +69,23 @@ Deno.serve(async (req: Request) => {
           throw new Error('Un compte avec cet email existe déjà. Veuillez vous connecter.');
         }
 
-        authData = { user };
+        const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            ...(user.user_metadata ?? {}),
+            full_name: fullName,
+            selected_children_count: selectedChildren,
+            billing_period: billingPeriod,
+            promo_code: promoCode || null,
+          },
+        });
+
+        if (updateError || !updatedUser.user) {
+          throw new Error('Erreur lors de la mise à jour du compte existant');
+        }
+
+        authData = updatedUser;
       } else {
         throw new Error('Failed to create user: ' + authError.message);
       }
@@ -77,6 +93,24 @@ Deno.serve(async (req: Request) => {
 
     if (!authData || !authData.user) {
       throw new Error('Failed to create user');
+    }
+
+    // Ensure the new account is marked as confirmed even when creation succeeds on the first attempt
+    const { error: confirmError, data: confirmedUser } = await supabase.auth.admin.updateUserById(authData.user.id, {
+      email_confirm: true,
+      user_metadata: {
+        ...(authData.user.user_metadata ?? {}),
+        full_name: fullName,
+        selected_children_count: selectedChildren,
+        billing_period: billingPeriod,
+        promo_code: promoCode || null,
+      },
+    });
+
+    if (confirmError) {
+      console.error('Failed to confirm user email:', confirmError);
+    } else if (confirmedUser?.user) {
+      authData = confirmedUser;
     }
 
     const { data: settingsData, error: settingsError } = await supabase
