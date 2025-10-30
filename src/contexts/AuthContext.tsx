@@ -350,6 +350,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    if (role === 'parent') {
+      try {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            to: email,
+            subject: 'Bienvenue sur PioPi',
+            template: 'welcome',
+            data: {
+              parentName: fullName,
+            },
+          }),
+        });
+      } catch (welcomeError) {
+        console.error('Failed to send welcome email:', welcomeError);
+      }
+    }
+
     setUser(data.user);
     await loadUserProfile(data.user.id);
   }

@@ -211,13 +211,13 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
 
                   <div className="mt-8 text-center">
                     <p className="text-gray-700 text-lg mb-4 font-semibold">
-                      Vous n'avez pas de compte ?
+                      Envie de démarrer l'aventure ?
                     </p>
                     <button
                       onClick={onRegisterClick}
                       className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-black text-lg rounded-xl hover:from-green-600 hover:to-emerald-600 transition shadow-lg"
                     >
-                      Inscrivez-vous gratuitement
+                      Choisir mon abonnement
                     </button>
                   </div>
                 </div>
@@ -318,7 +318,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
                 >
-                  Choisir
+                  Choisir cette formule
                 </button>
               </div>
 
@@ -364,7 +364,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
-                  Choisir
+                  Choisir cette formule
                 </button>
               </div>
 
@@ -407,7 +407,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition"
                 >
-                  Choisir
+                  Choisir cette formule
                 </button>
               </div>
 
@@ -454,7 +454,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
-                  Choisir
+                  Choisir cette formule
                 </button>
               </div>
 
@@ -505,7 +505,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   onClick={onRegisterClick}
                   className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl transition shadow-lg"
                 >
-                  Choisir
+                  Choisir cette formule
                 </button>
               </div>
             </div>
@@ -676,13 +676,13 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
               Des milliers d'élèves progressent déjà...
             </p>
             <p className="text-xl mb-12 text-white/90 max-w-3xl mx-auto leading-relaxed">
-              Inscription gratuite en 30 secondes. Commence immédiatement à apprendre en t'amusant. Aucune carte bancaire requise.
+              Démarre ton essai gratuit en choisissant l'abonnement adapté à ta famille. Aucun prélèvement avant la fin de la période d'essai.
             </p>
             <button
               onClick={onRegisterClick}
               className="bg-white text-purple-600 px-16 py-6 rounded-full text-2xl font-black shadow-2xl hover:shadow-3xl transition-all transform hover:scale-110 hover:bg-yellow-300 hover:text-purple-700"
             >
-              Commencer gratuitement
+              Choisir mon abonnement
             </button>
             <p className="mt-8 text-white/80 text-lg">
               Accessible sur ordinateur, tablette et mobile
