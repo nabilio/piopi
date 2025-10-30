@@ -7,6 +7,7 @@ type CreatePaymentOptions = {
   childrenCount: number;
   successUrl: string;
   cancelUrl: string;
+  trialPeriodDays?: number;
 };
 
 type StripeCheckoutResponse = {

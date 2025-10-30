@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { CheckCircle, LogOut, Baby, UserPlus, Sparkles, Plus } from 'lucide-react';
 import { Logo } from './Logo';
 import { PlanSelection } from './PlanSelection';
+import { UpgradePlansPage } from './UpgradePlansPage';
 import { useTrialConfig } from '../hooks/useTrialConfig';
 
 type ParentOnboardingProps = {
@@ -44,6 +45,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completingOnboarding, setCompletingOnboarding] = useState(false);
   const [existingChildrenCount, setExistingChildrenCount] = useState(0);
+  const [showUpgradePlans, setShowUpgradePlans] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -228,6 +230,24 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const maxChildrenAllowed = subscription ? (PLAN_CHILD_LIMITS[subscription.plan_type || ''] || subscription.children_count || 1) : 0;
   const hasReachedChildLimit = subscription ? existingChildrenCount >= maxChildrenAllowed : false;
 
+  useEffect(() => {
+    if (hasReachedChildLimit) {
+      setShowChildForm(false);
+    }
+  }, [hasReachedChildLimit]);
+
+  useEffect(() => {
+    if (showUpgradePlans) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showUpgradePlans]);
+
   if (initializing || subscriptionLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
@@ -281,6 +301,20 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   // Step 2: Add child form (merged with welcome)
   const renderAddChildStep = () => (
     <div className="bg-white rounded-2xl shadow-xl p-8 relative">
+      {showUpgradePlans && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <UpgradePlansPage
+              currentChildrenCount={existingChildrenCount}
+              onCancel={() => setShowUpgradePlans(false)}
+              onSuccess={() => {
+                setShowUpgradePlans(false);
+                loadSubscription();
+              }}
+            />
+          </div>
+        </div>
+      )}
       <div className="text-center mb-6">
         <div className="flex items-center justify-center gap-3 mb-4">
           <Logo size={56} />
@@ -373,20 +407,39 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       )}
 
       {hasReachedChildLimit && (
-        <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-yellow-900 text-sm">
-          Vous avez atteint la limite d'enfants incluse dans votre formule {selectedPlanLabel || 'actuelle'}. Pour ajouter d'autres profils, veuillez mettre à jour votre abonnement.
+        <div className="mb-6 space-y-3">
+          <div className="p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-yellow-900 text-sm">
+            Vous avez atteint la limite d'enfants incluse dans votre formule {selectedPlanLabel || 'actuelle'}. Pour ajouter d'autres profils, mettez à niveau votre abonnement.
+          </div>
         </div>
       )}
 
-      {!showChildForm && !hasReachedChildLimit ? (
-        <button
-          onClick={() => setShowChildForm(true)}
-          className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-        >
-          <Plus size={24} />
-          Ajouter un enfant
-        </button>
-      ) : (!hasReachedChildLimit && (
+      {!showChildForm && (
+        <div className="space-y-3">
+          <button
+            onClick={() => {
+              if (!hasReachedChildLimit) {
+                setShowChildForm(true);
+              }
+            }}
+            disabled={hasReachedChildLimit}
+            className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-200 disabled:to-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+          >
+            <Plus size={24} />
+            Ajouter un enfant
+          </button>
+          {hasReachedChildLimit && (
+            <button
+              onClick={() => setShowUpgradePlans(true)}
+              className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl"
+            >
+              Mettre à niveau mon abonnement
+            </button>
+          )}
+        </div>
+      )}
+
+      {!hasReachedChildLimit && showChildForm && (
         <div className="space-y-5 mb-8">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -515,7 +568,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
             </button>
           </div>
         </div>
-      ))}
+      )}
 
       {addedChildren.length > 0 && !showChildForm && (
         <button
