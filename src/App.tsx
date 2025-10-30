@@ -177,25 +177,6 @@ function AppContent() {
     }
   }, [user, profile]);
 
-  // Vérifier si on est sur la page de confirmation d'email
-  if (window.location.pathname === '/confirm-email') {
-    return <EmailConfirmedPage />;
-  }
-
-  // Vérifier si on est sur la page de réinitialisation de mot de passe
-  if (window.location.pathname === '/reset-password') {
-    return <ResetPasswordPage />;
-  }
-
-  // DEBUG: Show test query page
-  if (window.location.search.includes('test-quiz-query')) {
-    return <TestQuizQuery />;
-  }
-
-  if (window.location.pathname === '/child-qr-login') {
-    return <ChildQRLoginPage />;
-  }
-
   useEffect(() => {
     if (!user) {
       setView('home');
@@ -214,7 +195,33 @@ function AppContent() {
     } else if ((profile?.role === 'child' || isViewingAsChild) && (view === 'parent-dashboard' || view === 'parent-home')) {
       setView('home');
     }
-  }, [user, profile, isViewingAsChild]);
+  }, [user, profile, isViewingAsChild, view]);
+
+  const pathname = window.location.pathname;
+  const searchParams = window.location.search;
+  const isConfirmEmailRoute = pathname === '/confirm-email';
+  const isResetPasswordRoute = pathname === '/reset-password';
+  const isTestQuizQueryRoute = searchParams.includes('test-quiz-query');
+  const isChildQrLoginRoute = pathname === '/child-qr-login';
+
+  // Vérifier si on est sur la page de confirmation d'email
+  if (isConfirmEmailRoute) {
+    return <EmailConfirmedPage />;
+  }
+
+  // Vérifier si on est sur la page de réinitialisation de mot de passe
+  if (isResetPasswordRoute) {
+    return <ResetPasswordPage />;
+  }
+
+  // DEBUG: Show test query page
+  if (isTestQuizQueryRoute) {
+    return <TestQuizQuery />;
+  }
+
+  if (isChildQrLoginRoute) {
+    return <ChildQRLoginPage />;
+  }
 
   if (loading) {
     return (
