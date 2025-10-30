@@ -16,6 +16,14 @@ type ParentSubscription = {
   trial_end_date: string | null;
 };
 
+const PLAN_CHILD_LIMITS: Record<string, number> = {
+  basic: 1,
+  duo: 2,
+  family: 3,
+  premium: 4,
+  liberte: 999,
+};
+
 export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const { user, signOut } = useAuth();
   const { formattedBaseTrial } = useTrialConfig();
@@ -35,6 +43,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const [subscriptionLoading, setSubscriptionLoading] = useState(true);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completingOnboarding, setCompletingOnboarding] = useState(false);
+  const [existingChildrenCount, setExistingChildrenCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -59,9 +68,11 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       if (data) {
         setSubscription(data);
         setStep('add-child');
+        await refreshChildrenCount();
       } else {
         setSubscription(null);
         setStep('plan');
+        setExistingChildrenCount(0);
       }
     } catch (err) {
       console.error('Error loading subscription during onboarding:', err);
@@ -73,6 +84,23 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
     }
   }
 
+  async function refreshChildrenCount() {
+    if (!user) return;
+
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('parent_id', user.id)
+      .eq('role', 'child');
+
+    if (error) {
+      console.error('Erreur lors du comptage des enfants existants:', error);
+      return;
+    }
+
+    setExistingChildrenCount(count || 0);
+  }
+
   async function handleAddChild() {
     if (!user || !newChildData.full_name || !newChildData.age || !newChildData.grade_level) {
       return;
@@ -80,6 +108,16 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
 
     if (!subscription) {
       setCompletionError("Veuillez d'abord confirmer votre abonnement avant d'ajouter un enfant.");
+      return;
+    }
+
+    const maxChildrenAllowed = PLAN_CHILD_LIMITS[subscription.plan_type || ''] || subscription.children_count || 1;
+
+    if (existingChildrenCount >= maxChildrenAllowed) {
+      const limitLabel = maxChildrenAllowed >= 999
+        ? "la formule Liberté (ajoutez autant d'enfants que souhaité)"
+        : `${maxChildrenAllowed} enfant${maxChildrenAllowed > 1 ? 's' : ''}`;
+      setCompletionError(`Vous avez atteint la limite de ${limitLabel} pour votre offre.`);
       return;
     }
 
@@ -124,6 +162,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         accessories: newChildData.accessories
       };
       setAddedChildren([...addedChildren, newChild]);
+      setExistingChildrenCount((count) => count + 1);
 
       // Reset form
       setNewChildData({
@@ -151,7 +190,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       return;
     }
 
-    if (addedChildren.length === 0) {
+    if (existingChildrenCount === 0) {
       setCompletionError('Ajoutez au moins un enfant pour continuer.');
       return;
     }
@@ -186,6 +225,8 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
 
   const selectedPlanLabel = subscription?.plan_type ? (planLabels[subscription.plan_type] || subscription.plan_type) : null;
   const trialEndDate = subscription?.trial_end_date ? new Date(subscription.trial_end_date) : null;
+  const maxChildrenAllowed = subscription ? (PLAN_CHILD_LIMITS[subscription.plan_type || ''] || subscription.children_count || 1) : 0;
+  const hasReachedChildLimit = subscription ? existingChildrenCount >= maxChildrenAllowed : false;
 
   if (initializing || subscriptionLoading) {
     return (
@@ -282,22 +323,27 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-5 text-left mb-6">
-        <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
-          <Sparkles className="text-blue-600" size={20} />
-          Votre abonnement est prêt
-        </h3>
-        <div className="space-y-1 text-sm text-blue-800">
-          {selectedPlanLabel && (
-            <p><strong>Formule :</strong> {selectedPlanLabel} ({subscription?.children_count} enfant{subscription && subscription.children_count > 1 ? 's' : ''})</p>
-          )}
-          <p><strong>Essai gratuit :</strong> {formattedBaseTrial}</p>
-          {trialEndDate && (
-            <p><strong>Prochain prélèvement estimé :</strong> {trialEndDate.toLocaleDateString('fr-FR')}</p>
-          )}
-          <p><strong>Annulation :</strong> possible à tout moment avant la fin de l'essai</p>
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-5 text-left mb-6">
+          <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+            <Sparkles className="text-blue-600" size={20} />
+            Votre abonnement est prêt
+          </h3>
+          <div className="space-y-1 text-sm text-blue-800">
+            {selectedPlanLabel && (
+              <p><strong>Formule :</strong> {selectedPlanLabel} ({subscription?.children_count} enfant{subscription && subscription.children_count > 1 ? 's' : ''})</p>
+            )}
+            <p><strong>Essai gratuit :</strong> {formattedBaseTrial}</p>
+            {trialEndDate && (
+              <p><strong>Prochain prélèvement estimé :</strong> {trialEndDate.toLocaleDateString('fr-FR')}</p>
+            )}
+            <p><strong>Annulation :</strong> possible à tout moment avant la fin de l'essai</p>
+            <p>
+              <strong>Limite d'enfants :</strong>{' '}
+              {maxChildrenAllowed >= 999 ? 'Illimitée (formule Liberté)' : `${maxChildrenAllowed} enfant${maxChildrenAllowed > 1 ? 's' : ''}`}
+            </p>
+            <p><strong>Enfants déjà ajoutés :</strong> {existingChildrenCount}</p>
+          </div>
         </div>
-      </div>
 
       {completionError && (
         <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm">
@@ -326,7 +372,13 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         </div>
       )}
 
-      {!showChildForm ? (
+      {hasReachedChildLimit && (
+        <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-yellow-900 text-sm">
+          Vous avez atteint la limite d'enfants incluse dans votre formule {selectedPlanLabel || 'actuelle'}. Pour ajouter d'autres profils, veuillez mettre à jour votre abonnement.
+        </div>
+      )}
+
+      {!showChildForm && !hasReachedChildLimit ? (
         <button
           onClick={() => setShowChildForm(true)}
           className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
@@ -334,7 +386,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
           <Plus size={24} />
           Ajouter un enfant
         </button>
-      ) : (
+      ) : (!hasReachedChildLimit && (
         <div className="space-y-5 mb-8">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -463,7 +515,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
             </button>
           </div>
         </div>
-      )}
+      ))}
 
       {addedChildren.length > 0 && !showChildForm && (
         <button

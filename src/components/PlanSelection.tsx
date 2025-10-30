@@ -1,20 +1,61 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
+import { createStripeCheckout, verifyStripeCheckout } from '../utils/payment';
+
+type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
 
 type PricingPlan = {
+  id: PlanId;
   children: number;
   monthlyPrice: number;
   yearlyPrice: number;
+  label: string;
+  description: string;
 };
 
 const PRICING_PLANS: PricingPlan[] = [
-  { children: 1, monthlyPrice: 2.0, yearlyPrice: 20.0 },
-  { children: 2, monthlyPrice: 3.0, yearlyPrice: 30.0 },
-  { children: 3, monthlyPrice: 5.0, yearlyPrice: 50.0 },
-  { children: 4, monthlyPrice: 6.0, yearlyPrice: 60.0 },
-  { children: 5, monthlyPrice: 8.0, yearlyPrice: 80.0 },
+  {
+    id: 'basic',
+    children: 1,
+    monthlyPrice: 2.0,
+    yearlyPrice: 20.0,
+    label: 'Solo',
+    description: 'Parfait pour un premier explorateur',
+  },
+  {
+    id: 'duo',
+    children: 2,
+    monthlyPrice: 3.0,
+    yearlyPrice: 30.0,
+    label: 'Duo',
+    description: 'Idéal pour deux enfants complices',
+  },
+  {
+    id: 'family',
+    children: 3,
+    monthlyPrice: 5.0,
+    yearlyPrice: 50.0,
+    label: 'Famille',
+    description: 'Pour une tribu motivée',
+  },
+  {
+    id: 'premium',
+    children: 4,
+    monthlyPrice: 6.0,
+    yearlyPrice: 60.0,
+    label: 'Premium',
+    description: 'Tous les héros sous le même toit',
+  },
+  {
+    id: 'liberte',
+    children: 5,
+    monthlyPrice: 8.0,
+    yearlyPrice: 80.0,
+    label: 'Liberté',
+    description: 'Pour les familles nombreuses (5+)',
+  },
 ];
 
 type PlanSelectionProps = {
@@ -25,15 +66,28 @@ type FlowStep = 'plan-selection' | 'payment' | 'confirmation';
 
 const STEP_ORDER: FlowStep[] = ['plan-selection', 'payment', 'confirmation'];
 
+type PendingCheckoutPayload = {
+  planId: PlanId;
+  childrenCount: number;
+  price: number;
+  sessionId: string;
+  promoCode?: string;
+  promoMonths?: number;
+  totalTrialDays: number;
+};
+
+const PENDING_CHECKOUT_KEY = 'pendingSubscriptionCheckout';
+
 export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [selectedChildren, setSelectedChildren] = useState(1);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [promoCode, setPromoCode] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
   const [step, setStep] = useState<FlowStep>('plan-selection');
+  const [processingCheckout, setProcessingCheckout] = useState(false);
+  const [finalizingCheckout, setFinalizingCheckout] = useState(false);
   const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline, activeDescription } = useTrialConfig();
 
   const selectedPlan = PRICING_PLANS.find((plan) => plan.children === selectedChildren) || PRICING_PLANS[0];
@@ -76,11 +130,70 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     }
   }
 
-  async function handleConfirmSubscription() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout_status');
+    const provider = params.get('provider');
+    const sessionId = params.get('session_id');
+
+    if (!checkoutStatus) {
+      return;
+    }
+
+    if (provider !== 'stripe') {
+      params.delete('checkout_status');
+      params.delete('provider');
+      params.delete('session_id');
+      const cleanUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+      window.history.replaceState({}, document.title, cleanUrl);
+      return;
+    }
+
+    if (checkoutStatus === 'success' && sessionId) {
+      const pendingRaw = localStorage.getItem(PENDING_CHECKOUT_KEY);
+      if (!pendingRaw) {
+        setError('Impossible de confirmer le paiement : session introuvable.');
+        localStorage.removeItem(PENDING_CHECKOUT_KEY);
+      } else {
+        try {
+          const pending = JSON.parse(pendingRaw) as PendingCheckoutPayload;
+          const matchingPlan = PRICING_PLANS.find((plan) => plan.id === pending.planId);
+          if (matchingPlan) {
+            setSelectedChildren(matchingPlan.children);
+          }
+          setStep('payment');
+          setFinalizingCheckout(true);
+          finalizeCheckout(pending, sessionId).finally(() => {
+            setFinalizingCheckout(false);
+          });
+        } catch (parseError) {
+          console.error('Failed to parse pending checkout payload:', parseError);
+          setError('Une erreur est survenue lors de la récupération du paiement.');
+          localStorage.removeItem(PENDING_CHECKOUT_KEY);
+        }
+      }
+    } else if (checkoutStatus === 'cancel') {
+      setStep('payment');
+      setError('Paiement annulé. Vous pouvez réessayer.');
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+    }
+
+    params.delete('checkout_status');
+    params.delete('provider');
+    params.delete('session_id');
+    const cleanUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }, []);
+
+  async function finalizeCheckout(pending: PendingCheckoutPayload, sessionId: string) {
     setError('');
-    setLoading(true);
 
     try {
+      const verification = await verifyStripeCheckout(sessionId);
+      if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+        throw new Error('Le paiement n’a pas été validé.');
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -89,41 +202,45 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         throw new Error('Utilisateur non authentifié');
       }
 
-      const promoMonths = promoValidation?.valid ? promoValidation.free_months || 0 : 0;
+      const selectedPlanConfig = PRICING_PLANS.find((plan) => plan.id === pending.planId) || PRICING_PLANS[0];
+      const trialStartDate = new Date();
       const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + totalTrialDays);
+      trialEndDate.setDate(trialEndDate.getDate() + pending.totalTrialDays);
 
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
-        .insert({
-          user_id: user.id,
-          plan_type: billingPeriod,
-          children_count: selectedChildren,
-          price,
-          status: 'trial',
-          trial_start_date: new Date().toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-          promo_code: promoValidation?.valid ? promoCode.trim().toUpperCase() : null,
-          promo_months_remaining: promoMonths,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            plan_type: pending.planId,
+            children_count: pending.childrenCount,
+            price: pending.price,
+            status: 'trial',
+            trial_start_date: trialStartDate.toISOString(),
+            trial_end_date: trialEndDate.toISOString(),
+            promo_code: pending.promoCode || null,
+            promo_months_remaining: pending.promoMonths || 0,
+          },
+          { onConflict: 'user_id' },
+        );
 
       if (subscriptionError) throw subscriptionError;
 
       await supabase.from('subscription_history').insert({
         user_id: user.id,
-        children_count: selectedChildren,
-        price,
-        plan_type: billingPeriod,
+        children_count: pending.childrenCount,
+        price: pending.price,
+        plan_type: pending.planId,
         action_type: 'trial_started',
         notes:
-          promoCode && promoValidation?.valid
-            ? `Essai gratuit de ${formattedTotalTrial} démarré avec le code promo: ${promoCode.toUpperCase()}`
-            : `Essai gratuit de ${formattedTotalTrial} démarré`,
+          pending.promoCode && pending.promoMonths
+            ? `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré avec le code promo: ${pending.promoCode}`
+            : `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré`,
       });
 
-      if (promoCode && promoValidation?.valid) {
+      if (pending.promoCode && pending.promoMonths) {
         await supabase.rpc('increment_promo_usage', {
-          promo_code_input: promoCode,
+          promo_code_input: pending.promoCode,
         });
       }
 
@@ -140,8 +257,8 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             },
             body: JSON.stringify({
               email: user.email,
-              childrenCount: selectedChildren,
-              monthlyPrice: price,
+              childrenCount: pending.childrenCount,
+              monthlyPrice: selectedPlanConfig.monthlyPrice,
             }),
           });
         } catch (emailError) {
@@ -149,12 +266,57 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         }
       }
 
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
       setStep('confirmation');
     } catch (err: any) {
-      console.error('Subscription error:', err);
-      setError(err.message || "Erreur lors de la création de l'abonnement");
-    } finally {
-      setLoading(false);
+      console.error('Subscription finalization error:', err);
+      setError(err.message || "Erreur lors de la finalisation de l'abonnement");
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+    }
+  }
+
+  async function handleStartPayment() {
+    if (billingPeriod === 'yearly') {
+      setError("Le paiement annuel sera bientôt disponible. Choisissez l'option mensuelle pour commencer votre essai.");
+      return;
+    }
+
+    setError('');
+    setProcessingCheckout(true);
+
+    try {
+      const successUrl = new URL(window.location.href);
+      successUrl.searchParams.set('checkout_status', 'success');
+      successUrl.searchParams.set('provider', 'stripe');
+
+      const cancelUrl = new URL(window.location.href);
+      cancelUrl.searchParams.set('checkout_status', 'cancel');
+      cancelUrl.searchParams.set('provider', 'stripe');
+
+      const checkout = await createStripeCheckout({
+        planId: selectedPlan.id,
+        childrenCount: selectedPlan.children,
+        successUrl: successUrl.toString(),
+        cancelUrl: cancelUrl.toString(),
+      });
+
+      const pendingPayload: PendingCheckoutPayload = {
+        planId: selectedPlan.id,
+        childrenCount: checkout.billedChildren,
+        price: checkout.amount,
+        sessionId: checkout.sessionId,
+        promoCode: promoValidation?.valid ? promoCode.trim().toUpperCase() : undefined,
+        promoMonths: promoValidation?.valid ? promoValidation.free_months || 0 : undefined,
+        totalTrialDays,
+      };
+
+      localStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify(pendingPayload));
+
+      window.location.href = checkout.url;
+    } catch (err: any) {
+      console.error('Checkout initiation error:', err);
+      setProcessingCheckout(false);
+      setError(err.message || 'Impossible de lancer le paiement.');
     }
   }
 
@@ -204,19 +366,25 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             const isSelected = selectedChildren === plan.children;
             return (
               <button
-                key={plan.children}
+                key={plan.id}
                 onClick={() => setSelectedChildren(plan.children)}
-                className={`p-6 rounded-2xl border-4 transition-all ${
+                className={`p-6 rounded-2xl border-4 transition-all text-left ${
                   isSelected
                     ? 'border-blue-500 bg-blue-50 shadow-lg scale-105'
                     : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
                 }`}
               >
-                <div className="flex items-center justify-center mb-3">
-                  <Users className={isSelected ? 'text-blue-500' : 'text-gray-400'} size={32} />
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-lg font-semibold text-gray-900">{plan.label}</div>
+                    <p className="text-xs text-gray-500">{plan.description}</p>
+                  </div>
+                  <Users className={isSelected ? 'text-blue-500' : 'text-gray-400'} size={28} />
                 </div>
-                <div className="text-3xl font-bold text-gray-900 mb-1">{plan.children}</div>
-                <div className="text-sm text-gray-600 mb-3">{plan.children === 1 ? 'enfant' : 'enfants'}</div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">
+                  {plan.children === 5 ? '5+' : plan.children}
+                </div>
+                <div className="text-sm text-gray-600 mb-3">{plan.children === 1 ? 'enfant inclus' : 'enfants inclus'}</div>
                 <div className="text-2xl font-bold text-gray-900">{planPrice.toFixed(2)}€</div>
                 <div className="text-xs text-gray-500">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</div>
                 <div className="text-xs text-gray-500 mt-2">{perChild.toFixed(2)}€ par enfant</div>
@@ -320,7 +488,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             <div className="space-y-3 text-gray-700 text-sm">
               <div className="flex items-center justify-between">
                 <span>Formule sélectionnée</span>
-                <span className="font-semibold">{selectedChildren} {selectedChildren === 1 ? 'enfant' : 'enfants'}</span>
+                <span className="font-semibold">{selectedPlan.label}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Période de facturation</span>
@@ -329,6 +497,10 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
               <div className="flex items-center justify-between">
                 <span>Prix par {billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
                 <span className="font-semibold">{price.toFixed(2)} €</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Enfants inclus</span>
+                <span className="font-semibold">{selectedChildren === 5 ? '5 ou plus' : `${selectedChildren}`} enfants</span>
               </div>
             </div>
           </div>
@@ -386,7 +558,9 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         <div className="lg:col-span-2">
           <div className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl p-8 text-white shadow-xl">
             <h3 className="text-2xl font-bold mb-4">Prêt à démarrer ?</h3>
-            <p className="text-sm text-white/80 mb-6">Confirmez votre essai gratuit et accédez immédiatement à PioPi.</p>
+            <p className="text-sm text-white/80 mb-6">
+              Ajoutez votre moyen de paiement sécurisé pour confirmer l'essai gratuit.
+            </p>
             <div className="bg-white/10 rounded-xl p-4 mb-6 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span>Montant aujourd'hui</span>
@@ -408,19 +582,26 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
               </div>
             )}
 
+            {finalizingCheckout && (
+              <div className="bg-white/20 border border-white/40 text-sm text-white rounded-lg px-4 py-3 mb-6 flex items-center gap-3">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                Validation de votre paiement en cours...
+              </div>
+            )}
+
             <button
-              onClick={handleConfirmSubscription}
-              disabled={loading}
+              onClick={handleStartPayment}
+              disabled={processingCheckout || finalizingCheckout}
               className="w-full py-4 bg-white text-purple-600 font-bold rounded-xl hover:bg-purple-50 transition flex items-center justify-center gap-3 disabled:opacity-60"
             >
-              {loading ? (
+              {processingCheckout ? (
                 <>
                   <div className="animate-spin rounded-full h-6 w-6 border-3 border-purple-600 border-t-transparent"></div>
-                  Confirmation en cours...
+                  Redirection vers le paiement...
                 </>
               ) : (
                 <>
-                  Confirmer mon essai gratuit
+                  Ajouter ma carte et activer l'essai
                   <ArrowRight size={24} />
                 </>
               )}
@@ -455,7 +636,11 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         <div className="space-y-2 text-gray-700 text-sm">
           <div className="flex items-center justify-between">
             <span>Formule</span>
-            <span className="font-semibold">{selectedChildren} {selectedChildren === 1 ? 'enfant' : 'enfants'}</span>
+            <span className="font-semibold">{selectedPlan.label}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span>Enfants inclus</span>
+            <span className="font-semibold">{selectedChildren === 5 ? '5 ou plus' : `${selectedChildren}`} enfants</span>
           </div>
           <div className="flex items-center justify-between">
             <span>Période</span>
