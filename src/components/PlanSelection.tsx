@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 import { createStripeCheckout, verifyStripeCheckout } from '../utils/payment';
-import { useAuth } from '../contexts/AuthContext';
 
 type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
 
@@ -61,11 +60,11 @@ const PRICING_PLANS: PricingPlan[] = [
 
 type PlanSelectionProps = {
   onComplete: () => void;
-  allowAccountCreation?: boolean;
-  onCancel?: () => void;
 };
 
-type FlowStep = 'plan-selection' | 'account' | 'payment' | 'confirmation';
+type FlowStep = 'plan-selection' | 'payment' | 'confirmation';
+
+const STEP_ORDER: FlowStep[] = ['plan-selection', 'payment', 'confirmation'];
 
 type PendingCheckoutPayload = {
   planId: PlanId;
@@ -79,8 +78,7 @@ type PendingCheckoutPayload = {
 
 const PENDING_CHECKOUT_KEY = 'pendingSubscriptionCheckout';
 
-export function PlanSelection({ onComplete, allowAccountCreation = false, onCancel }: PlanSelectionProps) {
-  const { user, signUp } = useAuth();
+export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [selectedChildren, setSelectedChildren] = useState(1);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [promoCode, setPromoCode] = useState('');
@@ -90,15 +88,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
   const [step, setStep] = useState<FlowStep>('plan-selection');
   const [processingCheckout, setProcessingCheckout] = useState(false);
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
-  const [accountError, setAccountError] = useState('');
-  const [creatingAccount, setCreatingAccount] = useState(false);
-  const [accountCreated, setAccountCreated] = useState(false);
-  const [accountForm, setAccountForm] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
   const {
     baseTrialDays,
     formattedBaseTrial,
@@ -106,8 +95,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
     activeDescription,
     loading: trialConfigLoading,
   } = useTrialConfig();
-
-  const hasAccountStep = allowAccountCreation && !user;
 
   const selectedPlan = PRICING_PLANS.find((plan) => plan.children === selectedChildren) || PRICING_PLANS[0];
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
@@ -161,62 +148,14 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
     }
   }
 
-  async function handleCreateAccount(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAccountError('');
-
-    if (creatingAccount) {
-      return;
-    }
-
-    if (!accountForm.fullName.trim()) {
-      setAccountError('Veuillez renseigner votre nom.');
-      return;
-    }
-
-    if (!accountForm.email.trim()) {
-      setAccountError('Veuillez renseigner votre email.');
-      return;
-    }
-
-    if (accountForm.password.length < 6) {
-      setAccountError('Le mot de passe doit contenir au moins 6 caractères.');
-      return;
-    }
-
-    if (accountForm.password !== accountForm.confirmPassword) {
-      setAccountError('Les mots de passe ne correspondent pas.');
-      return;
-    }
-
-    setCreatingAccount(true);
-    try {
-      await signUp(
-        accountForm.email.trim(),
-        accountForm.password,
-        accountForm.fullName.trim(),
-        'parent',
-      );
-      setAccountCreated(true);
-      setAccountError('');
-      setStep('payment');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Impossible de créer le compte.';
-      setAccountError(message);
-    } finally {
-      setCreatingAccount(false);
-    }
-  }
-
   const finalizeCheckout = useCallback(
     async (pending: PendingCheckoutPayload, sessionId: string) => {
       setError('');
 
       try {
         const verification = await verifyStripeCheckout(sessionId);
-        const paymentStatus = verification.paymentStatus ?? '';
-        if (verification.status !== 'complete' || !['paid', 'no_payment_required', 'unpaid'].includes(paymentStatus)) {
-          throw new Error("Le paiement n'a pas été validé.");
+        if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+          throw new Error('Le paiement n’a pas été validé.');
         }
 
         const {
@@ -388,14 +327,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
       return;
     }
 
-    if (!user) {
-      setError('Veuillez créer votre compte parent avant de poursuivre vers le paiement.');
-      if (hasAccountStep) {
-        setStep('account');
-      }
-      return;
-    }
-
     setError('');
     setProcessingCheckout(true);
 
@@ -413,7 +344,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
         childrenCount: selectedPlan.children,
         successUrl: successUrl.toString(),
         cancelUrl: cancelUrl.toString(),
-        trialPeriodDays: totalTrialDays,
       });
 
       const pendingPayload: PendingCheckoutPayload = {
@@ -437,7 +367,7 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
     }
   }
 
-  const currentStepIndex = stepOrder.indexOf(step);
+  const currentStepIndex = STEP_ORDER.indexOf(step);
 
   const planStep = (
     <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
@@ -586,8 +516,7 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
       <button
         onClick={() => {
           setError('');
-          setAccountError('');
-          setStep(hasAccountStep ? 'account' : 'payment');
+          setStep('payment');
         }}
         className="w-full py-5 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-black text-xl rounded-xl hover:from-blue-600 hover:to-purple-600 transition flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
       >
@@ -597,98 +526,10 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
     </div>
   );
 
-  const accountStep = (
-    <div className="bg-white rounded-2xl shadow-xl p-8 max-w-3xl mx-auto">
-      <h3 className="text-3xl font-bold text-gray-900 mb-4 text-center">Créez votre compte parent</h3>
-      <p className="text-center text-gray-600 mb-6">
-        Configurez votre accès sécurisé pour gérer vos enfants et suivre leur progression.
-      </p>
-      {accountError && (
-        <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl text-red-700 text-sm font-semibold text-center">
-          {accountError}
-        </div>
-      )}
-      <form onSubmit={handleCreateAccount} className="space-y-5">
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Votre nom complet</label>
-          <input
-            type="text"
-            value={accountForm.fullName}
-            onChange={(e) => setAccountForm({ ...accountForm, fullName: e.target.value })}
-            placeholder="Ex: Marie Dupont"
-            className="w-full px-5 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">Adresse email</label>
-          <input
-            type="email"
-            value={accountForm.email}
-            onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
-            placeholder="vous@email.com"
-            className="w-full px-5 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Mot de passe</label>
-            <input
-              type="password"
-              value={accountForm.password}
-              onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })}
-              placeholder="Minimum 6 caractères"
-              className="w-full px-5 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Confirmez le mot de passe</label>
-            <input
-              type="password"
-              value={accountForm.confirmPassword}
-              onChange={(e) => setAccountForm({ ...accountForm, confirmPassword: e.target.value })}
-              placeholder="Répétez le mot de passe"
-              className="w-full px-5 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-            />
-          </div>
-        </div>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-          Votre essai gratuit de {summaryTrialLabel} commence dès maintenant. Aucun prélèvement avant le {firstChargeDate.toLocaleDateString('fr-FR')}.
-        </div>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => {
-              setAccountError('');
-              setStep('plan-selection');
-            }}
-            className="w-full md:w-auto px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition"
-          >
-            ← Retour aux formules
-          </button>
-          <button
-            type="submit"
-            disabled={creatingAccount}
-            className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold rounded-xl hover:from-green-600 hover:to-teal-600 transition shadow-lg hover:shadow-xl disabled:opacity-60"
-          >
-            {creatingAccount ? 'Création du compte...' : 'Créer mon compte et continuer'}
-          </button>
-        </div>
-      </form>
-      <p className="mt-6 text-xs text-gray-500 text-center">
-        En créant votre compte, vous acceptez nos conditions d'utilisation et notre politique de confidentialité.
-      </p>
-    </div>
-  );
-
   const paymentStep = (
     <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
       <div className="grid lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3 space-y-6">
-          {accountCreated && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-700 text-sm font-semibold">
-              Votre compte parent est prêt. Il ne reste plus qu'à confirmer votre essai gratuit.
-            </div>
-          )}
           <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6">
             <h3 className="text-2xl font-bold text-gray-900 mb-4">Résumé de votre essai</h3>
             <div className="space-y-3 text-gray-700 text-sm">
@@ -882,16 +723,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-6xl mx-auto">
-        {onCancel && (
-          <div className="mb-6">
-            <button
-              onClick={onCancel}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-white text-gray-700 font-semibold rounded-xl shadow hover:shadow-md border border-gray-200 hover:bg-gray-50 transition"
-            >
-              ← Retour
-            </button>
-          </div>
-        )}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-3 mb-6">
             <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -903,7 +734,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
           </div>
           <h2 className="text-5xl font-bold text-gray-900 mb-4">
             {step === 'plan-selection' && 'Choisissez votre abonnement'}
-            {step === 'account' && 'Créez votre compte'}
             {step === 'payment' && 'Phase de paiement'}
             {step === 'confirmation' && 'Merci pour votre confiance !'}
           </h2>
@@ -916,7 +746,7 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
 
         <div className="max-w-3xl mx-auto mb-12">
           <div className="flex items-center justify-between gap-4">
-            {stepOrder.map((flowStep, index) => (
+            {STEP_ORDER.map((flowStep, index) => (
               <div key={flowStep} className="flex items-center gap-4 flex-1">
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all ${
@@ -927,7 +757,7 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
                 >
                   {index < currentStepIndex ? <Check size={24} /> : index + 1}
                 </div>
-                {index < stepOrder.length - 1 && (
+                {index < STEP_ORDER.length - 1 && (
                   <div
                     className={`flex-1 h-1 rounded-full ${
                       index < currentStepIndex
@@ -942,7 +772,6 @@ export function PlanSelection({ onComplete, allowAccountCreation = false, onCanc
         </div>
 
         {step === 'plan-selection' && planStep}
-        {step === 'account' && accountStep}
         {step === 'payment' && paymentStep}
         {step === 'confirmation' && confirmationStep}
 

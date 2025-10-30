@@ -53,7 +53,6 @@ type RequestBody = {
   childrenCount: number;
   successUrl: string;
   cancelUrl: string;
-  trialPeriodDays?: number;
 };
 
 Deno.serve(async (req) => {
@@ -121,7 +120,6 @@ Deno.serve(async (req) => {
           planId: plan.id,
           billedChildren: billedChildren.toString(),
         },
-        trial_period_days: body.trialPeriodDays && body.trialPeriodDays > 0 ? body.trialPeriodDays : undefined,
       },
       line_items: [
         {

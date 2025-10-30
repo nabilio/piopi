@@ -612,6 +612,14 @@ export function Header({
                   <User size={20} />
                   Connexion
                 </button>
+                {onRegisterClick && (
+                  <button
+                    onClick={onRegisterClick}
+                    className="flex items-center gap-2 bg-white hover:bg-white/90 text-purple-600 px-6 py-3 rounded-full font-semibold transition shadow-md"
+                  >
+                    Inscription
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -657,13 +665,23 @@ export function Header({
               </button>
             )}
             {!user && (
-              <button
-                onClick={onAuthClick}
-                className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-full font-semibold transition backdrop-blur-sm"
-              >
-                <User size={18} />
-                <span className="text-sm">Connexion</span>
-              </button>
+              <>
+                <button
+                  onClick={onAuthClick}
+                  className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-full font-semibold transition backdrop-blur-sm"
+                >
+                  <User size={18} />
+                  <span className="text-sm">Connexion</span>
+                </button>
+                {onRegisterClick && (
+                  <button
+                    onClick={onRegisterClick}
+                    className="flex items-center gap-2 bg-white hover:bg-white/90 text-purple-600 px-4 py-2 rounded-full font-semibold transition text-sm"
+                  >
+                    Inscription
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

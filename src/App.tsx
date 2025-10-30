@@ -24,7 +24,7 @@ import { NetworkPanel } from './components/NetworkPanel';
 import { Settings } from './components/Settings';
 import { UserExplorer } from './components/UserExplorer';
 import { LandingPage } from './components/LandingPage';
-import { PlanSelection } from './components/PlanSelection';
+import { SimpleRegistration } from './components/SimpleRegistration';
 import { ParentHome } from './components/ParentHome';
 import { ParentActivityFeed } from './components/ParentActivityFeed';
 import { ParentNotifications } from './components/ParentNotifications';
@@ -250,13 +250,15 @@ function AppContent() {
 
     if (showRegistration) {
       return (
-        <PlanSelection
-          allowAccountCreation
-          onCancel={() => setShowRegistration(false)}
-          onComplete={() => {
-            setShowRegistration(false);
+        <SimpleRegistration
+          onSuccess={() => {
             refreshProfile();
           }}
+          onBackToLogin={() => setShowRegistration(false)}
+          onContactClick={() => setView('contact')}
+          onTermsClick={() => setView('terms')}
+          onPrivacyClick={() => setView('privacy')}
+          onLegalClick={() => setView('legal')}
         />
       );
     }
@@ -865,15 +867,7 @@ function AppContent() {
         />
       )}
 
-      {showAuthModal && !profile && (
-        <AuthModal
-          onClose={() => setShowAuthModal(false)}
-          onRegisterClick={() => {
-            setShowAuthModal(false);
-            setShowRegistration(true);
-          }}
-        />
-      )}
+      {showAuthModal && !profile && <AuthModal onClose={() => setShowAuthModal(false)} />}
 
       {showAvatarCustomizer && (
         <AvatarCustomizer
