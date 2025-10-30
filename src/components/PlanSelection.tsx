@@ -117,6 +117,17 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     return date;
   }, [totalTrialDays]);
 
+  if (trialConfigLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="mx-auto h-16 w-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-lg text-gray-600 font-semibold">Chargement de votre offre d'essai...</p>
+        </div>
+      </div>
+    );
+  }
+
   async function validatePromoCode() {
     if (!promoCode) {
       setPromoValidation(null);
@@ -161,9 +172,9 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        throw new Error('Utilisateur non authentifié');
-      }
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
       const selectedPlanConfig = PRICING_PLANS.find((plan) => plan.id === pending.planId) || PRICING_PLANS[0];
       const trialStartDate = new Date();
@@ -187,7 +198,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
           { onConflict: 'user_id' },
         );
 
-      if (subscriptionError) throw subscriptionError;
+        if (subscriptionError) throw subscriptionError;
 
       await supabase.from('subscription_history').insert({
         user_id: user.id,
@@ -206,6 +217,9 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
           promo_code_input: pending.promoCode,
         });
       }
+    },
+    [onComplete],
+  );
 
       const {
         data: { session },
@@ -224,10 +238,17 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
               monthlyPrice: selectedPlanConfig.monthlyPrice,
             }),
           });
-        } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
+        } catch (parseError) {
+          console.error('Failed to parse pending checkout payload:', parseError);
+          setError('Une erreur est survenue lors de la récupération du paiement.');
+          localStorage.removeItem(PENDING_CHECKOUT_KEY);
         }
       }
+    } else if (checkoutStatus === 'cancel') {
+      setStep('payment');
+      setError('Paiement annulé. Vous pouvez réessayer.');
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+    }
 
       localStorage.removeItem(PENDING_CHECKOUT_KEY);
       if (isMountedRef.current) {
@@ -776,6 +797,10 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             ))}
           </div>
         </div>
+
+        {step === 'plan-selection' && planStep}
+        {step === 'payment' && paymentStep}
+        {step === 'confirmation' && confirmationStep}
 
         {step === 'plan-selection' && planStep}
         {step === 'payment' && paymentStep}

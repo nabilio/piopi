@@ -684,27 +684,52 @@ export function AdminPanel() {
 
     setLoading(true);
     try {
-      const settingsId = appSettings?.id ?? '00000000-0000-0000-0000-000000000001';
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      const updates: Partial<AppSettings> & { id: string; updated_at: string; default_trial_days: number } = {
-        id: settingsId,
-        default_trial_days: Math.round(defaultTrialDays),
-        trial_promo_active: trialPromoForm.active,
-        trial_promo_days: trialPromoForm.active ? Math.round(trialPromoForm.days) : null,
-        trial_promo_name: trialPromoForm.active ? (trialPromoForm.name.trim() || null) : null,
-        trial_promo_description: trialPromoForm.active ? (trialPromoForm.description.trim() || null) : null,
-        trial_promo_starts_at: trialPromoForm.active ? parseDateInput(trialPromoForm.startDate) : null,
-        trial_promo_ends_at: trialPromoForm.active ? parseDateInput(trialPromoForm.endDate, true) : null,
-        updated_at: new Date().toISOString(),
+      if (!session?.access_token) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+
+      const payload = {
+        defaultTrialDays: Math.round(defaultTrialDays),
+        promo: {
+          active: trialPromoForm.active,
+          days: trialPromoForm.active ? Math.round(trialPromoForm.days) : null,
+          name: trialPromoForm.active ? (trialPromoForm.name.trim() || null) : null,
+          description: trialPromoForm.active ? (trialPromoForm.description.trim() || null) : null,
+          startsAt: trialPromoForm.active ? parseDateInput(trialPromoForm.startDate) : null,
+          endsAt: trialPromoForm.active ? parseDateInput(trialPromoForm.endDate, true) : null,
+        },
       };
 
-      const { error } = await supabase
-        .from('app_settings')
-        .upsert(updates, { onConflict: 'id' });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-trial-settings`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        let errorMessage = 'Mise à jour impossible';
+        try {
+          const errorBody = await response.json();
+          if (errorBody?.error) {
+            errorMessage = errorBody.error;
+          }
+        } catch (parseError) {
+          console.error('Erreur lecture réponse update-trial-settings:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
 
-      setMessage('Paramètres d\'essai mis à jour avec succès');
+      setMessage("Paramètres d'essai mis à jour avec succès");
       await loadData();
     } catch (error: any) {
       console.error('Erreur mise à jour paramètres essai:', error);
