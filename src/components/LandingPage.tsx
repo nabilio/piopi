@@ -28,6 +28,11 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
   const { formattedBaseTrial, promoHeadline, promoBanner } = useTrialConfig();
   const heroTrialBadge = promoHeadline;
   const trialFeatureLabel = formattedBaseTrial ? `Essai gratuit: ${formattedBaseTrial}` : 'Essai gratuit offert';
+  const scrollToPricing = () => {
+    if (typeof document === 'undefined') return;
+    const pricingSection = document.getElementById('pricing');
+    pricingSection?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     // Check if user just confirmed their email
@@ -210,15 +215,9 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
                   </button>
 
                   <div className="mt-8 text-center">
-                    <p className="text-gray-700 text-lg mb-4 font-semibold">
-                      Vous n'avez pas de compte ?
+                    <p className="text-gray-700 text-lg font-semibold">
+                      Besoin d'un compte ? Choisissez un forfait ci-dessous pour finaliser l'inscription.
                     </p>
-                    <button
-                      onClick={onRegisterClick}
-                      className="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-black text-lg rounded-xl hover:from-green-600 hover:to-emerald-600 transition shadow-lg"
-                    >
-                      Inscrivez-vous gratuitement
-                    </button>
                   </div>
                 </div>
               </div>
@@ -270,7 +269,7 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
         </div>
       </section>
 
-      <section className="py-16 bg-gradient-to-b from-transparent to-white">
+      <section id="pricing" className="py-16 bg-gradient-to-b from-transparent to-white">
         <div className="container mx-auto px-4">
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
@@ -670,19 +669,19 @@ export function LandingPage({ onRegisterClick, onContactClick, onTermsClick, onP
               </div>
             </div>
             <h2 className="text-5xl md:text-7xl font-black mb-6">
-              Rejoins l'aventure maintenant !
+              Découvrez nos forfaits en famille
             </h2>
             <p className="text-2xl md:text-3xl mb-8 font-bold text-white/95">
               Des milliers d'élèves progressent déjà...
             </p>
             <p className="text-xl mb-12 text-white/90 max-w-3xl mx-auto leading-relaxed">
-              Inscription gratuite en 30 secondes. Commence immédiatement à apprendre en t'amusant. Aucune carte bancaire requise.
+              Connectez-vous avec votre email ou Google. Créez votre compte parent pendant la sélection du forfait qui correspond à votre famille.
             </p>
             <button
-              onClick={onRegisterClick}
+              onClick={scrollToPricing}
               className="bg-white text-purple-600 px-16 py-6 rounded-full text-2xl font-black shadow-2xl hover:shadow-3xl transition-all transform hover:scale-110 hover:bg-yellow-300 hover:text-purple-700"
             >
-              Commencer gratuitement
+              Voir les forfaits
             </button>
             <p className="mt-8 text-white/80 text-lg">
               Accessible sur ordinateur, tablette et mobile
