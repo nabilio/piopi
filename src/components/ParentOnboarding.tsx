@@ -1,31 +1,40 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Users, CheckCircle, ArrowRight, AlertCircle, LogOut, X, Baby, UserPlus, Sparkles, Plus, Edit } from 'lucide-react';
+import { Users, CheckCircle, ArrowRight, AlertCircle, LogOut, Baby, UserPlus, Plus, Edit } from 'lucide-react';
 import { Logo } from './Logo';
+import type { PlanId } from '../utils/payment';
 
 type ParentOnboardingProps = {
   onComplete: () => void;
 };
 
+type SubscriptionRecord = {
+  plan_type: string | null;
+  children_count: number | null;
+  price: number | null;
+  status: string | null;
+};
+
 type SubscriptionInfo = {
   childrenCount: number;
   monthlyPrice: number;
-  planType: 'solo' | 'duo' | 'trio' | 'famille';
+  planType: PlanId;
 };
 
 type PlanOption = {
-  id: 'solo' | 'duo' | 'trio' | 'famille';
+  id: PlanId;
   name: string;
   childrenCount: number;
   monthlyPrice: number;
   pricePerChild: number;
   description: string;
+  isUnlimited?: boolean;
 };
 
 const PLAN_OPTIONS: PlanOption[] = [
   {
-    id: 'solo',
+    id: 'basic',
     name: 'Solo',
     childrenCount: 1,
     monthlyPrice: 2,
@@ -36,27 +45,72 @@ const PLAN_OPTIONS: PlanOption[] = [
     id: 'duo',
     name: 'Duo',
     childrenCount: 2,
-    monthlyPrice: 3,
-    pricePerChild: 1.5,
+    monthlyPrice: 3.5,
+    pricePerChild: 1.75,
     description: 'Pour 2 enfants'
   },
   {
-    id: 'trio',
-    name: 'Trio',
+    id: 'family',
+    name: 'Famille',
     childrenCount: 3,
     monthlyPrice: 5,
     pricePerChild: 1.67,
     description: 'Pour 3 enfants'
   },
   {
-    id: 'famille',
-    name: 'Famille',
+    id: 'premium',
+    name: 'Premium',
     childrenCount: 4,
     monthlyPrice: 6,
     pricePerChild: 1.5,
-    description: 'Pour 4 enfants ou plus'
+    description: 'Pour 4 enfants'
+  },
+  {
+    id: 'liberte',
+    name: 'Liberté',
+    childrenCount: 5,
+    monthlyPrice: 8,
+    pricePerChild: 1.6,
+    description: '5 enfants inclus puis +2€/enfant supplémentaire',
+    isUnlimited: true
   }
 ];
+
+const PLAN_OPTION_MAP: Record<PlanId, PlanOption> = PLAN_OPTIONS.reduce((acc, plan) => {
+  acc[plan.id] = plan;
+  return acc;
+}, {} as Record<PlanId, PlanOption>);
+
+const PLAN_ID_LIST: PlanId[] = ['basic', 'duo', 'family', 'premium', 'liberte'];
+
+const LEGACY_PLAN_MAP: Record<string, PlanId> = {
+  solo: 'basic',
+  trio: 'family',
+  famille: 'premium',
+};
+
+function isPlanId(value: string): value is PlanId {
+  return PLAN_ID_LIST.includes(value as PlanId);
+}
+
+function normalizePlanType(planType: string | null | undefined): PlanId {
+  if (!planType) {
+    return 'basic';
+  }
+
+  const lowered = planType.toLowerCase();
+  const mapped = LEGACY_PLAN_MAP[lowered] ?? lowered;
+
+  return isPlanId(mapped) ? mapped : 'basic';
+}
+
+function inferPlanFromCount(childrenCount: number): PlanId {
+  if (childrenCount <= 1) return 'basic';
+  if (childrenCount === 2) return 'duo';
+  if (childrenCount === 3) return 'family';
+  if (childrenCount === 4) return 'premium';
+  return 'liberte';
+}
 
 export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const { user, signOut } = useAuth();
@@ -74,8 +128,11 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const [addingChild, setAddingChild] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedSubscription, setAcceptedSubscription] = useState(false);
-  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo>({ childrenCount: 1, monthlyPrice: 2, planType: 'solo' });
-  const [selectedPlan, setSelectedPlan] = useState<'solo' | 'duo' | 'trio' | 'famille' | null>(null);
+  const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo>({ childrenCount: 1, monthlyPrice: 2, planType: 'basic' });
+  const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSubscription();
@@ -83,12 +140,90 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
 
   async function loadSubscription() {
     if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('plan_type, children_count, price, status')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-    setLoading(false);
+      if (error) {
+        throw error;
+      }
+
+      let record: SubscriptionRecord | null = data;
+
+      if (!record) {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from('subscriptions')
+          .select('plan_type, children_count, price, status')
+          .eq('parent_id', user.id)
+          .maybeSingle();
+
+        if (legacyError) {
+          throw legacyError;
+        }
+
+        record = legacyData;
+      }
+
+      setSubscription(record);
+
+      if (record) {
+        const normalizedPlan = normalizePlanType(record.plan_type);
+        const planDetails = PLAN_OPTION_MAP[normalizedPlan];
+        const includedChildren = record.children_count && record.children_count > 0
+          ? record.children_count
+          : planDetails?.childrenCount ?? 1;
+        const monthlyPrice = record.price ?? planDetails?.monthlyPrice ?? 0;
+
+        setSubscriptionInfo({
+          childrenCount: Math.max(includedChildren, 1),
+          monthlyPrice,
+          planType: normalizedPlan,
+        });
+        setSelectedPlan(normalizedPlan);
+      }
+    } catch (err) {
+      console.error('Error loading subscription:', err);
+      setSubscription(null);
+      setSubscriptionError("Nous n'avons pas pu récupérer les informations de votre abonnement. Vos enfants seront tout de même enregistrés.");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const normalizedPlanType = useMemo(() => {
+    if (subscription) {
+      return normalizePlanType(subscription.plan_type);
+    }
+    return inferPlanFromCount(addedChildren.length || 1);
+  }, [subscription, addedChildren.length]);
+
+  const planDetails = PLAN_OPTION_MAP[normalizedPlanType];
+  const includedChildren = useMemo(() => {
+    if (subscription?.children_count && subscription.children_count > 0) {
+      return subscription.children_count;
+    }
+    return planDetails?.childrenCount ?? 1;
+  }, [subscription, planDetails]);
+
+  const normalizedIncludedChildren = useMemo(() => Math.max(includedChildren, 1), [includedChildren]);
+  const isUnlimitedPlan = planDetails?.isUnlimited ?? false;
+  const remainingChildren = normalizedIncludedChildren - addedChildren.length;
+  const hasReachedLimit = !isUnlimitedPlan && remainingChildren <= 0;
+  const displayTotalChildren = isUnlimitedPlan
+    ? `${normalizedIncludedChildren}+`
+    : normalizedIncludedChildren.toString();
+  const priceLabel = subscription?.price ?? planDetails?.monthlyPrice ?? null;
 
   async function handleAddChild() {
     if (!user || !newChildData.full_name || !newChildData.age || !newChildData.grade_level) {
+      return;
+    }
+
+    if (hasReachedLimit) {
+      setError('Vous avez déjà ajouté tous les enfants inclus dans votre formule.');
       return;
     }
 
@@ -131,7 +266,8 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         character_type: newChildData.character_type,
         accessories: newChildData.accessories
       };
-      setAddedChildren([...addedChildren, newChild]);
+      setAddedChildren((current) => [...current, newChild]);
+      setError(null);
 
       // Reset form
       setNewChildData({
@@ -157,27 +293,24 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       return;
     }
 
-    // Suggest default plan based on children count
-    const newChildCount = addedChildren.length;
-    let suggestedPlan: 'solo' | 'duo' | 'trio' | 'famille' = 'solo';
-    if (newChildCount === 1) suggestedPlan = 'solo';
-    else if (newChildCount === 2) suggestedPlan = 'duo';
-    else if (newChildCount === 3) suggestedPlan = 'trio';
-    else suggestedPlan = 'famille';
+    const planType = subscription ? normalizePlanType(subscription.plan_type) : inferPlanFromCount(addedChildren.length);
+    const plan = PLAN_OPTION_MAP[planType];
+    const childrenCount = subscription?.children_count && subscription.children_count > 0
+      ? subscription.children_count
+      : plan?.childrenCount ?? Math.max(addedChildren.length, 1);
+    const monthlyPrice = subscription?.price ?? plan?.monthlyPrice ?? 0;
 
-    setSelectedPlan(suggestedPlan);
-    const plan = PLAN_OPTIONS.find(p => p.id === suggestedPlan)!;
+    setSelectedPlan(planType);
     setSubscriptionInfo({
-      childrenCount: plan.childrenCount,
-      monthlyPrice: plan.monthlyPrice,
-      planType: plan.id
+      childrenCount: Math.max(childrenCount, 1),
+      monthlyPrice,
+      planType
     });
 
-    // Move to subscription info step
     setStep('subscription-info');
   }
 
-  function handlePlanSelection(planId: 'solo' | 'duo' | 'trio' | 'famille') {
+  function handlePlanSelection(planId: PlanId) {
     setSelectedPlan(planId);
     const plan = PLAN_OPTIONS.find(p => p.id === planId)!;
     setSubscriptionInfo({
@@ -191,37 +324,6 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
     if (!user) return;
 
     try {
-      // Create subscription for the parent
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + 30);
-
-      const { error: subscriptionError } = await supabase
-        .from('subscriptions')
-        .insert({
-          user_id: user.id,
-          status: 'trial',
-          trial_start_date: new Date().toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-          children_count: subscriptionInfo.childrenCount,
-          plan_type: subscriptionInfo.planType
-        });
-
-      if (subscriptionError) {
-        // If subscription already exists, update it instead
-        if (subscriptionError.code === '23505') {
-          await supabase
-            .from('subscriptions')
-            .update({
-              children_count: subscriptionInfo.childrenCount,
-              plan_type: subscriptionInfo.planType,
-              updated_at: new Date().toISOString()
-            })
-            .eq('user_id', user.id);
-        } else {
-          console.error('Error creating subscription:', subscriptionError);
-        }
-      }
-
       // Mark parent onboarding as completed
       await supabase
         .from('profiles')
@@ -357,6 +459,58 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
             </li>
           </ol>
         </div>
+
+        {subscriptionError && (
+          <div className="mb-4 p-4 rounded-xl border-2 border-amber-200 bg-amber-50 text-amber-800 text-sm">
+            {subscriptionError}
+          </div>
+        )}
+
+        {planDetails && (
+          <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-500 rounded-2xl p-6 text-left text-white shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-blue-100">Votre formule</p>
+                <h2 className="text-2xl font-black mt-1">{planDetails.name}</h2>
+                <p className="text-sm text-blue-100/90 mt-1">{planDetails.description}</p>
+                {priceLabel !== null && (
+                  <p className="mt-3 text-lg font-semibold text-white">
+                    {priceLabel.toFixed(2)}€ / mois
+                  </p>
+                )}
+              </div>
+              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <Users size={26} className="text-white" />
+              </div>
+            </div>
+
+            <div className="mt-6 bg-white/15 rounded-xl p-4">
+              <p className="text-sm font-semibold">
+                Enfants ajoutés :{' '}
+                <span className="text-white text-lg">{addedChildren.length}</span>
+                <span className="text-blue-100 mx-1">/</span>
+                <span className="text-white text-lg">{displayTotalChildren}</span>
+              </p>
+              <p className="text-xs text-blue-100 mt-2">
+                {remainingChildren > 0 && !isUnlimitedPlan && (
+                  <>Il vous reste {remainingChildren} enfant{remainingChildren > 1 ? 's' : ''} à ajouter.</>
+                )}
+                {remainingChildren === 0 && !isUnlimitedPlan && (
+                  <>Tous les enfants inclus dans votre offre ont été ajoutés.</>
+                )}
+                {isUnlimitedPlan && remainingChildren > 0 && (
+                  <>Il vous reste {remainingChildren} enfant{remainingChildren > 1 ? 's' : ''} inclus avant facturation supplémentaire.</>
+                )}
+                {isUnlimitedPlan && remainingChildren <= 0 && (
+                  <>Vous pouvez ajouter d'autres enfants : ils seront facturés selon votre formule Liberté.</>
+                )}
+                {!isUnlimitedPlan && remainingChildren < 0 && (
+                  <>Vous avez dépassé la limite incluse de votre offre de {Math.abs(remainingChildren)} enfant{Math.abs(remainingChildren) > 1 ? 's' : ''}. Pensez à mettre à jour votre abonnement.</>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {addedChildren.length === 0 && (
@@ -397,13 +551,24 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       )}
 
       {!showChildForm ? (
-        <button
-          onClick={() => setShowChildForm(true)}
-          className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-        >
-          <Plus size={24} />
-          Ajouter un enfant
-        </button>
+        <>
+          <button
+            onClick={() => {
+              setError(null);
+              setShowChildForm(true);
+            }}
+            disabled={hasReachedLimit}
+            className="w-full py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={24} />
+            Ajouter un enfant
+          </button>
+          {hasReachedLimit && (
+            <p className="mt-3 text-sm text-blue-700 text-center font-semibold">
+              Vous avez ajouté tous les enfants inclus dans votre offre.
+            </p>
+          )}
+        </>
       ) : (
         <div className="space-y-5 mb-8">
           <div>
@@ -499,29 +664,30 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
           </div>
 
           <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowChildForm(false);
-                setNewChildData({
-                  full_name: '',
-                  age: '',
-                  grade_level: '',
-                  character_type: 'explorer',
-                  accessories: []
-                });
-              }}
-              className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleAddChild}
-              disabled={!newChildData.full_name || !newChildData.age || !newChildData.grade_level || addingChild}
-              className="flex-1 py-3 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 text-white font-bold rounded-xl transition shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-            >
-              {addingChild ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+          <button
+            onClick={() => {
+              setShowChildForm(false);
+              setNewChildData({
+                full_name: '',
+                age: '',
+                grade_level: '',
+                character_type: 'explorer',
+                accessories: []
+              });
+              setError(null);
+            }}
+            className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-xl transition"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleAddChild}
+            disabled={!newChildData.full_name || !newChildData.age || !newChildData.grade_level || addingChild || hasReachedLimit}
+            className="flex-1 py-3 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 text-white font-bold rounded-xl transition shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+          >
+            {addingChild ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
                   Ajout...
                 </>
               ) : (
@@ -532,6 +698,9 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
               )}
             </button>
           </div>
+          {error && (
+            <p className="text-sm text-red-600 text-center">{error}</p>
+          )}
         </div>
       )}
 
@@ -548,191 +717,187 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   );
 
   // Step 2: Subscription info
-  const renderSubscriptionInfoStep = () => (
-    <div className="bg-white rounded-2xl shadow-xl p-8">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
-          <CheckCircle className="text-blue-500" size={40} />
-        </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Récapitulatif de votre abonnement
-        </h2>
-        <p className="text-gray-600">
-          Vérifiez les informations avant de continuer
-        </p>
-      </div>
+  const renderSubscriptionInfoStep = () => {
+    const activePlan = selectedPlan ?? normalizedPlanType;
+    const formattedMonthlyPrice = subscriptionInfo.monthlyPrice.toFixed(2);
 
-      <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5 mb-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Enfants inscrits ({addedChildren.length})</h3>
-        <div className="space-y-2">
-          {addedChildren.map((child, index) => (
-            <div key={index} className="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-200">
-              <CheckCircle className="text-blue-600" size={20} />
-              <div className="flex-1">
-                <p className="font-semibold text-gray-900">{child.full_name}</p>
-                <p className="text-sm text-gray-600">{child.age} ans - {child.grade_level}</p>
+    return (
+      <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
+            <CheckCircle className="text-blue-500" size={40} />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Récapitulatif de votre abonnement
+          </h2>
+          <p className="text-gray-600">
+            Vérifiez les informations avant de continuer
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5 mb-6">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Enfants inscrits ({addedChildren.length})</h3>
+          <div className="space-y-2">
+            {addedChildren.map((child, index) => (
+              <div key={index} className="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-200">
+                <CheckCircle className="text-blue-600" size={20} />
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900">{child.full_name}</p>
+                  <p className="text-sm text-gray-600">{child.age} ans - {child.grade_level}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
+            Votre abonnement
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {PLAN_OPTIONS.map((plan) => {
+              const isSelected = plan.id === activePlan;
+              const canSelect = plan.id === activePlan;
+
+              return (
+                <button
+                  key={plan.id}
+                  onClick={() => canSelect && handlePlanSelection(plan.id)}
+                  disabled={!canSelect}
+                  className={`relative p-5 rounded-xl border-2 transition text-left ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900">{plan.name}</h4>
+                      <p className="text-sm text-gray-600">{plan.description}</p>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                      isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                    }`}>
+                      {isSelected && <CheckCircle className="text-white" size={16} />}
+                    </div>
+                  </div>
+                  <div className="text-3xl font-black text-blue-600">
+                    {plan.monthlyPrice.toFixed(2)}€<span className="text-lg font-semibold text-gray-600">/mois</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {plan.pricePerChild.toFixed(2)}€ par enfant
+                  </p>
+                  {!isSelected && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Plan sélectionné automatiquement lors de votre inscription
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-2xl p-6">
+            <div className="text-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Votre abonnement sélectionné
+              </h3>
+              <div className="flex items-center justify-center gap-3">
+                <Users className="text-blue-500" size={28} />
+                <p className="text-3xl font-black text-gray-900">
+                  {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
-          Choisissez votre plan
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {PLAN_OPTIONS.map((plan) => {
-            const isSelected = selectedPlan === plan.id;
-            const canSelect = addedChildren.length <= plan.childrenCount || plan.id === 'famille';
-            const isRecommended = addedChildren.length === plan.childrenCount ||
-                                 (addedChildren.length >= 4 && plan.id === 'famille');
-
-            return (
-              <button
-                key={plan.id}
-                onClick={() => canSelect && handlePlanSelection(plan.id)}
-                disabled={!canSelect}
-                className={`relative p-5 rounded-xl border-2 transition text-left ${
-                  isSelected
-                    ? 'border-blue-500 bg-blue-50'
-                    : canSelect
-                    ? 'border-gray-300 hover:border-blue-300 bg-white'
-                    : 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                }`}
-              >
-                {isRecommended && canSelect && (
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                    Recommandé
-                  </div>
-                )}
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="text-xl font-bold text-gray-900">{plan.name}</h4>
-                    <p className="text-sm text-gray-600">{plan.description}</p>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                  }`}>
-                    {isSelected && <CheckCircle className="text-white" size={16} />}
-                  </div>
-                </div>
-                <div className="text-3xl font-black text-blue-600">
-                  {plan.monthlyPrice}€<span className="text-lg font-semibold text-gray-600">/mois</span>
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  {plan.pricePerChild}€ par enfant
+            <div className="space-y-3 bg-white rounded-xl p-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-gray-700">
+                  <strong>Sans engagement</strong> - Annulation à tout moment
                 </p>
-                {!canSelect && (
-                  <p className="text-xs text-red-600 mt-2">
-                    Vous avez ajouté {addedChildren.length} enfant{addedChildren.length > 1 ? 's' : ''}
-                  </p>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-2xl p-6">
-          <div className="text-center mb-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              Votre abonnement sélectionné
-            </h3>
-            <div className="flex items-center justify-center gap-3">
-              <Users className="text-blue-500" size={28} />
-              <p className="text-3xl font-black text-gray-900">
-                {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
-              </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-gray-700">
+                  <strong>Essai gratuit activé</strong> - Profitez de l'expérience complète dès aujourd'hui
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-gray-700">
+                  <strong>Paiement sécurisé enregistré</strong> - Votre moyen de paiement est prêt pour la suite
+                </p>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="space-y-3 bg-white rounded-xl p-6">
-            <div className="flex items-start gap-3">
-              <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-              <p className="text-gray-700">
-                <strong>Sans engagement</strong> - Annulation à tout moment
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-              <p className="text-gray-700">
-                <strong>Premier mois gratuit</strong> - Profitez de l'essai complet
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-              <p className="text-gray-700">
-                <strong>Pas de carte bancaire</strong> nécessaire maintenant
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-6 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-sm text-yellow-800">
+                <strong>Important :</strong> Votre période d'essai gratuit vient de commencer. Vous pourrez annuler à tout moment depuis les paramètres.
               </p>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-6 mb-6">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-          <div>
-            <p className="text-sm text-yellow-800">
-              <strong>Important :</strong> En continuant, vous acceptez que votre période d'essai gratuit d'un mois commence immédiatement. Vous pourrez annuler à tout moment depuis les paramètres.
-            </p>
-          </div>
+        <div className="space-y-4 mb-6">
+          <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedSubscription ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+            <input
+              type="checkbox"
+              checked={acceptedSubscription}
+              onChange={(e) => setAcceptedSubscription(e.target.checked)}
+              className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700 font-semibold">
+              Je confirme mon abonnement de {formattedMonthlyPrice}€/mois pour {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
+            </span>
+          </label>
+
+          <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedTerms ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">
+              J'accepte les{' '}
+              <a href="/terms" target="_blank" className="text-blue-600 hover:underline font-semibold">
+                conditions d'utilisation
+              </a>
+              {' '}et la{' '}
+              <a href="/privacy" target="_blank" className="text-blue-600 hover:underline font-semibold">
+                politique de confidentialité
+              </a>
+              {' '}d'PioPi.
+            </span>
+          </label>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => setStep('add-child')}
+            className="flex-1 py-4 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-bold rounded-xl transition text-lg flex items-center justify-center gap-2"
+          >
+            <Edit size={20} />
+            Modifier
+          </button>
+          <button
+            onClick={handleCompleteOnboarding}
+            disabled={!acceptedTerms || !acceptedSubscription}
+            className="flex-1 py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+          >
+            <ArrowRight size={20} />
+            Commencer
+          </button>
         </div>
       </div>
-
-      <div className="space-y-4 mb-6">
-        <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedSubscription ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
-          <input
-            type="checkbox"
-            checked={acceptedSubscription}
-            onChange={(e) => setAcceptedSubscription(e.target.checked)}
-            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-700 font-semibold">
-            Je confirme mon abonnement de {subscriptionInfo.monthlyPrice}€/mois pour {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
-          </span>
-        </label>
-
-        <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedTerms ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
-          <input
-            type="checkbox"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="text-sm text-gray-700">
-            J'accepte les{' '}
-            <a href="/terms" target="_blank" className="text-blue-600 hover:underline font-semibold">
-              conditions d'utilisation
-            </a>
-            {' '}et la{' '}
-            <a href="/privacy" target="_blank" className="text-blue-600 hover:underline font-semibold">
-              politique de confidentialité
-            </a>
-            {' '}d'PioPi.
-          </span>
-        </label>
-      </div>
-
-      <div className="flex gap-3">
-        <button
-          onClick={() => setStep('add-child')}
-          className="flex-1 py-4 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-bold rounded-xl transition text-lg flex items-center justify-center gap-2"
-        >
-          <Edit size={20} />
-          Modifier
-        </button>
-        <button
-          onClick={handleCompleteOnboarding}
-          disabled={!acceptedTerms || !acceptedSubscription}
-          className="flex-1 py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-        >
-          <ArrowRight size={20} />
-          Commencer
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
