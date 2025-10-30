@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Calendar, Users, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { CreditCard, Calendar, Users, AlertCircle, CheckCircle, XCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useToast } from '../hooks/useToast';
-import { useTrialConfig } from '../hooks/useTrialConfig';
+import { PlanSelection } from './PlanSelection';
 
 type Subscription = {
   id: string;
@@ -33,7 +33,6 @@ type SubscriptionManagerProps = {
 export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}) {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
-  const { formattedBaseTrial } = useTrialConfig();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [daysRemaining, setDaysRemaining] = useState(0);
@@ -241,7 +240,7 @@ export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}
           <AlertCircle size={48} className="text-blue-400 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-gray-800 mb-2">Commencez votre essai gratuit</h3>
           <p className="text-gray-600 mb-4">
-            Vous n'avez pas encore d'abonnement actif. Ajoutez vos enfants pour démarrer votre essai gratuit de {formattedBaseTrial} !
+            Vous n'avez pas encore d'abonnement actif. Ajoutez vos enfants pour démarrer votre essai gratuit de 30 jours !
           </p>
           <button
             onClick={() => window.location.href = '/#/'}
@@ -380,7 +379,7 @@ export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}
                 <p className="text-blue-800 mb-3">
                   Votre période d'essai gratuit se termine le{' '}
                   <strong>{new Date(subscription.trial_end_date).toLocaleDateString('fr-FR')}</strong>.
-                  Profitez de toutes les fonctionnalités : votre moyen de paiement sera débité automatiquement après cette date.
+                  Profitez de toutes les fonctionnalités sans carte bancaire requise !
                 </p>
                 <p className="text-blue-700 text-sm">
                   Après l'essai, votre abonnement sera de <strong>{monthlyPrice}€/mois</strong> pour {actualChildrenCount} enfant(s).
@@ -398,7 +397,7 @@ export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}
                 <h3 className="font-bold text-orange-900 mb-2">Votre essai se termine bientôt</h3>
                 <p className="text-orange-800 mb-3">
                   Il ne reste que <strong>{daysRemaining} jour(s)</strong> à votre essai gratuit.
-                  Votre moyen de paiement sera débité à la fin de l'essai : annulez avant cette date si nécessaire.
+                  Ajoutez un moyen de paiement pour continuer à profiter d'PioPi.
                 </p>
               </div>
             </div>
@@ -525,7 +524,7 @@ export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}
         <h3 className="text-2xl font-bold text-gray-800 mb-4">Informations importantes</h3>
         <div className="space-y-3 text-gray-600">
           <p>• <strong>Tarification :</strong> De 2€ à 6€ selon le nombre d'enfants</p>
-          <p>• <strong>Essai gratuit :</strong> {formattedBaseTrial} offerts pour les 2 premiers enfants</p>
+          <p>• <strong>Essai gratuit :</strong> 30 jours offerts pour les 2 premiers enfants</p>
           <p>• <strong>Sans engagement :</strong> Annulation possible à tout moment</p>
           <p>• <strong>Renouvellement :</strong> Automatique chaque mois</p>
           <p>• <strong>Support :</strong> Disponible 7j/7 par email</p>
