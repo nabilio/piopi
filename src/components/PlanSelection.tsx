@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle } from 'lucide-react';
+import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 import { createStripeCheckout, verifyStripeCheckout } from '../utils/payment';
+import { useAuth } from '../contexts/AuthContext';
 
-type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
+export type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
 
 type PricingPlan = {
   id: PlanId;
@@ -59,7 +60,10 @@ const PRICING_PLANS: PricingPlan[] = [
 ];
 
 type PlanSelectionProps = {
-  onComplete: () => void;
+  onComplete?: () => void;
+  initialStep?: FlowStep;
+  initialPlanId?: PlanId;
+  onBack?: () => void;
 };
 
 type FlowStep = 'plan-selection' | 'payment' | 'confirmation';
@@ -78,16 +82,18 @@ type PendingCheckoutPayload = {
 
 const PENDING_CHECKOUT_KEY = 'pendingSubscriptionCheckout';
 
-export function PlanSelection({ onComplete }: PlanSelectionProps) {
-  const [selectedChildren, setSelectedChildren] = useState(1);
+export function PlanSelection({ onComplete, initialStep = 'plan-selection', initialPlanId, onBack }: PlanSelectionProps) {
+  const initialPlanConfig = PRICING_PLANS.find((plan) => plan.id === initialPlanId) || PRICING_PLANS[0];
+  const [selectedChildren, setSelectedChildren] = useState(initialPlanConfig.children);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [promoCode, setPromoCode] = useState('');
   const [error, setError] = useState('');
   const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
-  const [step, setStep] = useState<FlowStep>('plan-selection');
+  const [step, setStep] = useState<FlowStep>(initialStep);
   const [processingCheckout, setProcessingCheckout] = useState(false);
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
+  const { user } = useAuth();
   const {
     baseTrialDays,
     formattedBaseTrial,
@@ -113,6 +119,21 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
+
+  useEffect(() => {
+    if (!initialPlanId) {
+      return;
+    }
+
+    const matchingPlan = PRICING_PLANS.find((plan) => plan.id === initialPlanId);
+    if (matchingPlan) {
+      setSelectedChildren(matchingPlan.children);
+    }
+  }, [initialPlanId]);
+
+  useEffect(() => {
+    setStep(initialStep);
+  }, [initialStep]);
 
   if (trialConfigLoading) {
     return (
@@ -232,7 +253,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
 
         localStorage.removeItem(PENDING_CHECKOUT_KEY);
         setStep('confirmation');
-        onComplete();
+        onComplete?.();
       } catch (error: unknown) {
         console.error('Subscription finalization error:', error);
         const message = error instanceof Error ? error.message : "Erreur lors de la finalisation de l'abonnement";
@@ -302,26 +323,12 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     window.history.replaceState({}, document.title, cleanUrl);
   }, [finalizeCheckout, trialConfigLoading]);
 
-  const stepOrder = useMemo<FlowStep[]>(
-    () =>
-      hasAccountStep
-        ? ['plan-selection', 'account', 'payment', 'confirmation']
-        : ['plan-selection', 'payment', 'confirmation'],
-    [hasAccountStep],
-  );
-
-  if (trialConfigLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="mx-auto h-16 w-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-lg text-gray-600 font-semibold">Chargement de votre offre d'essai...</p>
-        </div>
-      </div>
-    );
-  }
-
   async function handleStartPayment() {
+    if (!user) {
+      setError('Veuillez créer un compte ou vous connecter pour lancer le paiement.');
+      return;
+    }
+
     if (billingPeriod === 'yearly') {
       setError("Le paiement annuel sera bientôt disponible. Choisissez l'option mensuelle pour commencer votre essai.");
       return;
@@ -636,9 +643,15 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
               </div>
             )}
 
+            {!user && (
+              <div className="bg-white/20 border border-white/40 text-sm text-white rounded-lg px-4 py-3 mb-6">
+                Connectez-vous ou créez votre compte pour finaliser votre abonnement.
+              </div>
+            )}
+
             <button
               onClick={handleStartPayment}
-              disabled={processingCheckout || finalizingCheckout}
+              disabled={processingCheckout || finalizingCheckout || !user}
               className="w-full py-4 bg-white text-purple-600 font-bold rounded-xl hover:bg-purple-50 transition flex items-center justify-center gap-3 disabled:opacity-60"
             >
               {processingCheckout ? (
@@ -647,10 +660,14 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
                   Redirection vers le paiement...
                 </>
               ) : (
-                <>
-                  Ajouter ma carte et activer l'essai
-                  <ArrowRight size={24} />
-                </>
+                user ? (
+                  <>
+                    Ajouter ma carte et activer l'essai
+                    <ArrowRight size={24} />
+                  </>
+                ) : (
+                  'Connectez-vous pour payer'
+                )
               )}
             </button>
             <button
@@ -711,7 +728,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
       </div>
       <p className="text-sm text-gray-500 mb-8">Nous sommes prêts à accueillir vos enfants !</p>
       <button
-        onClick={onComplete}
+        onClick={() => onComplete?.()}
         className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold rounded-xl hover:from-blue-600 hover:to-purple-600 transition flex items-center justify-center gap-3 mx-auto"
       >
         Commencer l'onboarding d'ajout d'enfants
@@ -723,6 +740,17 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-6xl mx-auto">
+        {onBack && (
+          <div className="mb-8">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold transition"
+            >
+              <ArrowLeft size={22} />
+              Retour à l'accueil
+            </button>
+          </div>
+        )}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-3 mb-6">
             <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
