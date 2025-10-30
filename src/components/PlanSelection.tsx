@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
@@ -140,14 +140,114 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
       if (error) throw error;
 
       setPromoValidation(data);
-    } catch (err) {
+    } catch (error: unknown) {
+      console.error('Promo code validation error:', error);
       setPromoValidation({ valid: false, message: 'Erreur lors de la validation du code' });
     } finally {
       setValidatingPromo(false);
     }
   }
 
+  const finalizeCheckout = useCallback(
+    async (pending: PendingCheckoutPayload, sessionId: string) => {
+      setError('');
+
+      try {
+        const verification = await verifyStripeCheckout(sessionId);
+        if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+          throw new Error('Le paiement n’a pas été validé.');
+        }
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          throw new Error('Utilisateur non authentifié');
+        }
+
+        const selectedPlanConfig = PRICING_PLANS.find((plan) => plan.id === pending.planId) || PRICING_PLANS[0];
+        const trialStartDate = new Date();
+        const trialEndDate = new Date();
+        trialEndDate.setDate(trialEndDate.getDate() + pending.totalTrialDays);
+
+        const { error: subscriptionError } = await supabase
+          .from('subscriptions')
+          .upsert(
+            {
+              user_id: user.id,
+              plan_type: pending.planId,
+              children_count: pending.childrenCount,
+              price: pending.price,
+              status: 'trial',
+              trial_start_date: trialStartDate.toISOString(),
+              trial_end_date: trialEndDate.toISOString(),
+              promo_code: pending.promoCode || null,
+              promo_months_remaining: pending.promoMonths || 0,
+            },
+            { onConflict: 'user_id' },
+          );
+
+        if (subscriptionError) throw subscriptionError;
+
+        await supabase.from('subscription_history').insert({
+          user_id: user.id,
+          children_count: pending.childrenCount,
+          price: pending.price,
+          plan_type: pending.planId,
+          action_type: 'trial_started',
+          notes:
+            pending.promoCode && pending.promoMonths
+              ? `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré avec le code promo: ${pending.promoCode}`
+              : `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré`,
+        });
+
+        if (pending.promoCode && pending.promoMonths) {
+          await supabase.rpc('increment_promo_usage', {
+            promo_code_input: pending.promoCode,
+          });
+        }
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          try {
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-subscription-confirmation`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                email: user.email,
+                childrenCount: pending.childrenCount,
+                monthlyPrice: selectedPlanConfig.monthlyPrice,
+              }),
+            });
+          } catch (emailError) {
+            console.error('Failed to send confirmation email:', emailError);
+          }
+        }
+
+        localStorage.removeItem(PENDING_CHECKOUT_KEY);
+        setStep('confirmation');
+        onComplete();
+      } catch (error: unknown) {
+        console.error('Subscription finalization error:', error);
+        const message = error instanceof Error ? error.message : "Erreur lors de la finalisation de l'abonnement";
+        setError(message);
+        localStorage.removeItem(PENDING_CHECKOUT_KEY);
+      }
+    },
+    [onComplete],
+  );
+
   useEffect(() => {
+    if (trialConfigLoading) {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const checkoutStatus = params.get('checkout_status');
     const provider = params.get('provider');
@@ -200,97 +300,17 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     params.delete('session_id');
     const cleanUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
     window.history.replaceState({}, document.title, cleanUrl);
-  }, []);
+  }, [finalizeCheckout, trialConfigLoading]);
 
-  async function finalizeCheckout(pending: PendingCheckoutPayload, sessionId: string) {
-    setError('');
-
-    try {
-      const verification = await verifyStripeCheckout(sessionId);
-      if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
-        throw new Error('Le paiement n’a pas été validé.');
-      }
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error('Utilisateur non authentifié');
-      }
-
-      const selectedPlanConfig = PRICING_PLANS.find((plan) => plan.id === pending.planId) || PRICING_PLANS[0];
-      const trialStartDate = new Date();
-      const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + pending.totalTrialDays);
-
-      const { error: subscriptionError } = await supabase
-        .from('subscriptions')
-        .upsert(
-          {
-            user_id: user.id,
-            plan_type: pending.planId,
-            children_count: pending.childrenCount,
-            price: pending.price,
-            status: 'trial',
-            trial_start_date: trialStartDate.toISOString(),
-            trial_end_date: trialEndDate.toISOString(),
-            promo_code: pending.promoCode || null,
-            promo_months_remaining: pending.promoMonths || 0,
-          },
-          { onConflict: 'user_id' },
-        );
-
-      if (subscriptionError) throw subscriptionError;
-
-      await supabase.from('subscription_history').insert({
-        user_id: user.id,
-        children_count: pending.childrenCount,
-        price: pending.price,
-        plan_type: pending.planId,
-        action_type: 'trial_started',
-        notes:
-          pending.promoCode && pending.promoMonths
-            ? `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré avec le code promo: ${pending.promoCode}`
-            : `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré`,
-      });
-
-      if (pending.promoCode && pending.promoMonths) {
-        await supabase.rpc('increment_promo_usage', {
-          promo_code_input: pending.promoCode,
-        });
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        try {
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-subscription-confirmation`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: user.email,
-              childrenCount: pending.childrenCount,
-              monthlyPrice: selectedPlanConfig.monthlyPrice,
-            }),
-          });
-        } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
-        }
-      }
-
-      localStorage.removeItem(PENDING_CHECKOUT_KEY);
-      setStep('confirmation');
-      onComplete();
-    } catch (err: any) {
-      console.error('Subscription finalization error:', err);
-      setError(err.message || "Erreur lors de la finalisation de l'abonnement");
-      localStorage.removeItem(PENDING_CHECKOUT_KEY);
-    }
+  if (trialConfigLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="mx-auto h-16 w-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-lg text-gray-600 font-semibold">Chargement de votre offre d'essai...</p>
+        </div>
+      </div>
+    );
   }
 
   async function handleStartPayment() {
@@ -331,10 +351,11 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
       localStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify(pendingPayload));
 
       window.location.href = checkout.url;
-    } catch (err: any) {
-      console.error('Checkout initiation error:', err);
+    } catch (error: unknown) {
+      console.error('Checkout initiation error:', error);
       setProcessingCheckout(false);
-      setError(err.message || 'Impossible de lancer le paiement.');
+      const message = error instanceof Error ? error.message : 'Impossible de lancer le paiement.';
+      setError(message);
     }
   }
 
