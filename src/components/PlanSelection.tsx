@@ -88,7 +88,13 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [step, setStep] = useState<FlowStep>('plan-selection');
   const [processingCheckout, setProcessingCheckout] = useState(false);
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
-  const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline, activeDescription } = useTrialConfig();
+  const {
+    baseTrialDays,
+    formattedBaseTrial,
+    promoHeadline: trialHeadline,
+    activeDescription,
+    loading: trialConfigLoading,
+  } = useTrialConfig();
 
   const selectedPlan = PRICING_PLANS.find((plan) => plan.children === selectedChildren) || PRICING_PLANS[0];
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
@@ -107,6 +113,17 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
+
+  if (trialConfigLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="mx-auto h-16 w-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-lg text-gray-600 font-semibold">Chargement de votre offre d'essai...</p>
+        </div>
+      </div>
+    );
+  }
 
   async function validatePromoCode() {
     if (!promoCode) {
@@ -268,6 +285,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
 
       localStorage.removeItem(PENDING_CHECKOUT_KEY);
       setStep('confirmation');
+      onComplete();
     } catch (err: any) {
       console.error('Subscription finalization error:', err);
       setError(err.message || "Erreur lors de la finalisation de l'abonnement");
