@@ -115,7 +115,7 @@ type PendingRegistrationPayment = {
   billingPeriod: 'monthly' | 'yearly';
 };
 
-const PENDING_REGISTRATION_KEY = 'pendingRegistrationPayment';
+export const PENDING_REGISTRATION_STORAGE_KEY = 'pendingRegistrationPayment';
 const LAST_COMPLETED_REGISTRATION_KEY = 'lastCompletedRegistrationPlan';
 
 type CompletedRegistrationPlan = {
@@ -155,6 +155,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [paymentError, setPaymentError] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [finalizingPayment, setFinalizingPayment] = useState(false);
+  const [planStatusMessage, setPlanStatusMessage] = useState('');
+  const [hasCompletedAccountCreation, setHasCompletedAccountCreation] = useState(() => {
+    const pending = getPendingRegistration();
+    return Boolean(pending);
+  });
   const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
 
   const selectedPlan = useMemo(
@@ -214,20 +219,21 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (plan) {
       setSelectedPlanId(plan.planId);
       if (step === 'plan') {
-        setStep(shouldSkipDetails ? 'payment' : 'details');
+        setStep(shouldSkipDetails || hasCompletedAccountCreation ? 'payment' : 'details');
       }
     }
-  }, [initialPlanId, shouldSkipDetails, step]);
+  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step]);
 
   useEffect(() => {
-    if (shouldSkipDetails && step === 'details') {
+    if ((shouldSkipDetails || hasCompletedAccountCreation) && step === 'details') {
       setStep('payment');
     }
-  }, [shouldSkipDetails, step]);
+  }, [shouldSkipDetails, hasCompletedAccountCreation, step]);
 
   function handlePlanSelection(plan: PricingPlan) {
     setSelectedPlanId(plan.planId);
-    if (shouldSkipDetails) {
+    setPlanStatusMessage('');
+    if (shouldSkipDetails || hasCompletedAccountCreation) {
       setStep('payment');
     } else {
       setStep('details');
@@ -313,8 +319,10 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod,
       };
 
-      localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(pending));
+      localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(pending));
       setPaymentError('');
+      setPlanStatusMessage('');
+      setHasCompletedAccountCreation(true);
       setStep('payment');
     } catch (err: unknown) {
       console.error('Registration error:', err);
@@ -326,13 +334,16 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }
 
   function getPendingRegistration(): PendingRegistrationPayment | null {
-    const raw = localStorage.getItem(PENDING_REGISTRATION_KEY);
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const raw = localStorage.getItem(PENDING_REGISTRATION_STORAGE_KEY);
     if (!raw) return null;
     try {
       return JSON.parse(raw) as PendingRegistrationPayment;
     } catch (parseError) {
       console.error('Failed to parse pending registration data:', parseError);
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
       return null;
     }
   }
@@ -377,7 +388,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod: pending.billingPeriod,
       });
 
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
       onSuccess();
     } catch (err: unknown) {
       console.error('Erreur lors de la validation du paiement:', err);
@@ -407,8 +418,15 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         setPaymentError('Impossible de retrouver la session de paiement.');
       }
     } else if (registrationStatus === 'cancel') {
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
-      setPaymentError('Le paiement a été annulé.');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+      }
+      setHasCompletedAccountCreation(true);
+      setPaymentError('');
+      setPlanStatusMessage('Le paiement a été annulé. Vous pouvez choisir un plan avant de réessayer.');
+      setPaymentLoading(false);
+      setFinalizingPayment(false);
+      setStep('plan');
     }
 
     params.delete('registration_payment');
@@ -420,13 +438,19 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
 
   useEffect(() => {
     const pending = getPendingRegistration();
-    if (pending && step !== 'payment') {
-      setStep('payment');
+    if (pending) {
+      setHasCompletedAccountCreation(true);
+      setSelectedPlanId(pending.planId);
+      setBillingPeriod(pending.billingPeriod);
+      if (step !== 'payment') {
+        setStep('payment');
+      }
     }
   }, [step]);
 
   async function handleStartPayment() {
     setPaymentError('');
+    setPlanStatusMessage('');
     setPaymentLoading(true);
 
     try {
@@ -439,7 +463,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           fullName: formData.fullName,
           billingPeriod,
         };
-        localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(basePending));
+        localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(basePending));
       }
 
       const successUrl = `${window.location.origin}/?registration_payment=success&session_id={CHECKOUT_SESSION_ID}`;
@@ -460,7 +484,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod,
         sessionId: response.sessionId,
       };
-      localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(pendingData));
+      localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(pendingData));
 
       window.location.href = response.url;
     } catch (err: unknown) {
@@ -470,6 +494,34 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     } finally {
       setPaymentLoading(false);
     }
+  }
+
+  function handleReturnToPlans() {
+    const pending = getPendingRegistration();
+    if (pending) {
+      setSelectedPlanId(pending.planId);
+      setBillingPeriod(pending.billingPeriod);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+    }
+    setPaymentError('');
+    setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
+    setPaymentLoading(false);
+    setFinalizingPayment(false);
+    setStep('plan');
+    setHasCompletedAccountCreation(true);
+  }
+
+  function handleExitRegistration() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+    }
+    setPaymentError('');
+    setPlanStatusMessage('');
+    setPaymentLoading(false);
+    setFinalizingPayment(false);
+    onCancel();
   }
 
   if (step === 'plan') {
@@ -486,6 +538,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            {planStatusMessage && (
+              <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 text-blue-800 rounded-xl">
+                {planStatusMessage}
+              </div>
+            )}
             <div className="flex items-center justify-center gap-4 mb-10">
               <button
                 onClick={() => setBillingPeriod('monthly')}
@@ -723,16 +780,21 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => {
-              localStorage.removeItem(PENDING_REGISTRATION_KEY);
-              onCancel();
-            }}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold mb-6"
-          >
-            <X size={20} />
-            Annuler l'inscription
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <button
+              onClick={handleReturnToPlans}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
+            >
+              <X size={20} />
+              Retourner au choix des plans
+            </button>
+            <button
+              onClick={handleExitRegistration}
+              className="text-sm text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
+            >
+              Quitter l'inscription
+            </button>
+          </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center mb-6">
@@ -779,6 +841,14 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 </div>
               </div>
             </div>
+
+            <button
+              onClick={handleReturnToPlans}
+              disabled={paymentLoading || finalizingPayment}
+              className="w-full mb-4 py-3 border-2 border-blue-500 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition disabled:opacity-50"
+            >
+              Revenir au choix des plans
+            </button>
 
             <button
               onClick={handleStartPayment}
