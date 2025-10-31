@@ -514,20 +514,35 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     setHasCompletedAccountCreation(true);
   }
 
-  function handleReturnHome() {
-    setPaymentError('');
-    setPlanStatusMessage('');
-    setPaymentLoading(false);
-    setFinalizingPayment(false);
-    onCancel();
-  }
-
-  function handleExitRegistration() {
+  function clearPendingRegistrationState() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
     setHasCompletedAccountCreation(false);
-    handleReturnHome();
+  }
+
+  function resetPaymentUiState() {
+    setPaymentError('');
+    setPlanStatusMessage('');
+    setPaymentLoading(false);
+    setFinalizingPayment(false);
+  }
+
+  function handleReturnHome() {
+    resetPaymentUiState();
+    if (step === 'payment') {
+      handleReturnToPlans();
+      return;
+    }
+    clearPendingRegistrationState();
+    onCancel();
+  }
+
+  function handleExitRegistration() {
+    resetPaymentUiState();
+    clearPendingRegistrationState();
+    setStep('plan');
+    onCancel();
   }
 
   async function handleSignOutAndExit() {
@@ -537,12 +552,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
 
     setSigningOut(true);
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
-      }
+      clearPendingRegistrationState();
       await signOut();
-      setHasCompletedAccountCreation(false);
-      handleReturnHome();
+      resetPaymentUiState();
+      setStep('plan');
+      onCancel();
     } catch (err) {
       console.error('Failed to sign out during registration:', err);
       alert(err instanceof Error ? err.message : 'Impossible de se déconnecter. Veuillez réessayer.');
