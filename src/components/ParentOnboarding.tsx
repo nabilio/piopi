@@ -45,8 +45,8 @@ const PLAN_OPTIONS: PlanOption[] = [
     id: 'duo',
     name: 'Duo',
     childrenCount: 2,
-    monthlyPrice: 3.5,
-    pricePerChild: 1.75,
+    monthlyPrice: 3,
+    pricePerChild: 1.5,
     description: 'Pour 2 enfants'
   },
   {
@@ -82,6 +82,39 @@ const PLAN_OPTION_MAP: Record<PlanId, PlanOption> = PLAN_OPTIONS.reduce((acc, pl
 }, {} as Record<PlanId, PlanOption>);
 
 const PLAN_ID_LIST: PlanId[] = ['basic', 'duo', 'family', 'premium', 'liberte'];
+
+const LAST_COMPLETED_REGISTRATION_KEY = 'lastCompletedRegistrationPlan';
+
+type CachedRegistrationPlan = {
+  planId: PlanId;
+  children: number;
+  billingPeriod: 'monthly' | 'yearly';
+};
+
+function readCachedRegistrationPlan(): CachedRegistrationPlan | null {
+  try {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    const raw = localStorage.getItem(LAST_COMPLETED_REGISTRATION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw) as CachedRegistrationPlan;
+  } catch (error) {
+    console.error('Failed to read cached registration plan:', error);
+    localStorage.removeItem(LAST_COMPLETED_REGISTRATION_KEY);
+    return null;
+  }
+}
+
+function clearCachedRegistrationPlan() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  localStorage.removeItem(LAST_COMPLETED_REGISTRATION_KEY);
+}
 
 const LEGACY_PLAN_MAP: Record<string, PlanId> = {
   solo: 'basic',
@@ -134,6 +167,30 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  function applyCachedRegistrationPlan() {
+    const cached = readCachedRegistrationPlan();
+    if (!cached) {
+      return false;
+    }
+
+    const planDetails = PLAN_OPTION_MAP[cached.planId];
+    if (!planDetails) {
+      return false;
+    }
+
+    const fallbackChildren = Math.max(cached.children, planDetails.childrenCount);
+
+    setSubscriptionInfo({
+      childrenCount: Math.max(fallbackChildren, 1),
+      monthlyPrice: planDetails.monthlyPrice,
+      planType: cached.planId,
+    });
+    setSelectedPlan(cached.planId);
+    setSubscriptionError(null);
+
+    return true;
+  }
+
   useEffect(() => {
     loadSubscription();
   }, [user]);
@@ -183,11 +240,17 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
           planType: normalizedPlan,
         });
         setSelectedPlan(normalizedPlan);
+        setSubscriptionError(null);
+        clearCachedRegistrationPlan();
+      } else {
+        applyCachedRegistrationPlan();
       }
     } catch (err) {
       console.error('Error loading subscription:', err);
       setSubscription(null);
-      setSubscriptionError("Nous n'avons pas pu récupérer les informations de votre abonnement. Vos enfants seront tout de même enregistrés.");
+      if (!applyCachedRegistrationPlan()) {
+        setSubscriptionError("Nous n'avons pas pu récupérer les informations de votre abonnement. Vos enfants seront tout de même enregistrés.");
+      }
     } finally {
       setLoading(false);
     }
@@ -348,9 +411,11 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         });
       }
 
+      clearCachedRegistrationPlan();
       onComplete();
     } catch (err) {
       console.error('Error completing onboarding:', err);
+      clearCachedRegistrationPlan();
       onComplete();
     }
   }
@@ -365,6 +430,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         .update({ onboarding_completed: true })
         .eq('id', user.id);
 
+      clearCachedRegistrationPlan();
       onComplete();
     } catch (err) {
       console.error('Error completing onboarding:', err);

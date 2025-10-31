@@ -43,7 +43,7 @@ const PRICING_PLANS: PricingPlan[] = [
     highlight: '1,50€ par enfant',
     features: [
       'Tous les cours et exercices',
-      'Suivi de progression détaillé',
+      'Suivi détaillé',
       'Mode bataille',
       'Réseau social sécurisé',
     ],
@@ -58,7 +58,7 @@ const PRICING_PLANS: PricingPlan[] = [
     highlight: '1,67€ par enfant',
     features: [
       'Tous les cours et exercices',
-      'Suivi de progression avancé',
+      'Suivi avancé',
       'Mode bataille',
       'Réseau social sécurisé',
     ],
@@ -80,6 +80,24 @@ const PRICING_PLANS: PricingPlan[] = [
       'Support prioritaire',
     ],
   },
+  {
+    planId: 'liberte',
+    name: 'Liberté',
+    children: 5,
+    childrenLabel: "Jusqu'à 5 enfants",
+    monthlyPrice: 8.0,
+    yearlyPrice: 80.0,
+    highlight: '+2€ par enfant supplémentaire',
+    features: [
+      "Jusqu'à 5 enfants inclus",
+      'Ajoutez des enfants supplémentaires à tout moment (+2€/enfant)',
+      'Tous les cours et exercices',
+      'Suivi de progression avancé',
+      'Mode bataille',
+      'Réseau social sécurisé',
+      'Support prioritaire VIP',
+    ],
+  },
 ];
 
 type RegistrationPageProps = {
@@ -98,6 +116,24 @@ type PendingRegistrationPayment = {
 };
 
 const PENDING_REGISTRATION_KEY = 'pendingRegistrationPayment';
+const LAST_COMPLETED_REGISTRATION_KEY = 'lastCompletedRegistrationPlan';
+
+type CompletedRegistrationPlan = {
+  planId: PlanId;
+  children: number;
+  billingPeriod: 'monthly' | 'yearly';
+};
+
+function cacheCompletedRegistration(plan: CompletedRegistrationPlan) {
+  try {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    localStorage.setItem(LAST_COMPLETED_REGISTRATION_KEY, JSON.stringify(plan));
+  } catch (storageError) {
+    console.error('Failed to cache completed registration plan:', storageError);
+  }
+}
 
 export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: RegistrationPageProps) {
   const { user, profile, signIn, signInWithGoogle } = useAuth();
@@ -119,7 +155,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [paymentError, setPaymentError] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [finalizingPayment, setFinalizingPayment] = useState(false);
-  const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline } = useTrialConfig();
+  const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
 
   const selectedPlan = useMemo(
     () => PRICING_PLANS.find((plan) => plan.planId === selectedPlanId) ?? PRICING_PLANS[0],
@@ -335,6 +371,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       }
 
       await sendWelcomeEmail(pending);
+      cacheCompletedRegistration({
+        planId: pending.planId,
+        children: pending.children,
+        billingPeriod: pending.billingPeriod,
+      });
 
       localStorage.removeItem(PENDING_REGISTRATION_KEY);
       onSuccess();
@@ -440,7 +481,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               Commencez votre aventure d'apprentissage
             </h1>
             <p className="text-xl text-gray-600">
-              {trialHeadline}
+              {promoBanner}
             </p>
           </div>
 
