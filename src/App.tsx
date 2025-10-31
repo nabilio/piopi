@@ -56,7 +56,7 @@ import { supabase } from './lib/supabase';
 import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
 import type { PlanId } from './utils/payment';
-import { RegistrationPage } from './components/RegistrationPage';
+import { RegistrationPage, PENDING_REGISTRATION_STORAGE_KEY } from './components/RegistrationPage';
 
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
@@ -181,8 +181,31 @@ function AppContent() {
   }, [user, profile]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
-    if (params.get('registration_payment')) {
+    const hasRegistrationPaymentParam = params.has('registration_payment');
+
+    let hasStoredPendingRegistration = false;
+    const storedPendingRegistration = localStorage.getItem(PENDING_REGISTRATION_STORAGE_KEY);
+    const validPlanIds: PlanId[] = ['basic', 'duo', 'family', 'premium', 'liberte'];
+
+    if (storedPendingRegistration) {
+      try {
+        const parsed = JSON.parse(storedPendingRegistration) as { planId?: PlanId | null } | null;
+        if (parsed?.planId && validPlanIds.includes(parsed.planId as PlanId)) {
+          setRegistrationPlanId(parsed.planId as PlanId);
+        }
+        hasStoredPendingRegistration = true;
+      } catch (error) {
+        console.error('Failed to parse pending registration storage value:', error);
+        localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+      }
+    }
+
+    if (hasRegistrationPaymentParam || hasStoredPendingRegistration) {
       setShowRegistration(true);
     }
   }, []);
