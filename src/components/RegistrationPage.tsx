@@ -1,22 +1,85 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Users, Mail, Lock, User, Tag, CreditCard, ShieldCheck, X } from 'lucide-react';
+import { Check, ArrowRight, Mail, Lock, User, Tag, CreditCard, ShieldCheck, X, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 import { createStripeCheckout, verifyStripeCheckout, type PlanId } from '../utils/payment';
 
 type PricingPlan = {
+  planId: PlanId;
+  name: string;
   children: number;
+  childrenLabel: string;
   monthlyPrice: number;
   yearlyPrice: number;
-  planId: PlanId;
+  badge?: string;
+  highlight?: string;
+  features: string[];
 };
 
 const PRICING_PLANS: PricingPlan[] = [
-  { children: 1, monthlyPrice: 2.00, yearlyPrice: 20.00, planId: 'basic' },
-  { children: 2, monthlyPrice: 3.50, yearlyPrice: 35.00, planId: 'duo' },
-  { children: 3, monthlyPrice: 5.00, yearlyPrice: 50.00, planId: 'family' },
-  { children: 4, monthlyPrice: 6.00, yearlyPrice: 60.00, planId: 'premium' },
+  {
+    planId: 'basic',
+    name: 'Basique',
+    children: 1,
+    childrenLabel: '1 enfant',
+    monthlyPrice: 2.0,
+    yearlyPrice: 20.0,
+    features: [
+      'Tous les cours et exercices',
+      'Suivi de progression',
+      'Mode bataille',
+      'Réseau social sécurisé',
+    ],
+  },
+  {
+    planId: 'duo',
+    name: 'Duo',
+    children: 2,
+    childrenLabel: "Jusqu'à 2 enfants",
+    monthlyPrice: 3.0,
+    yearlyPrice: 30.0,
+    badge: 'Populaire',
+    highlight: '1,50€ par enfant',
+    features: [
+      'Tous les cours et exercices',
+      'Suivi de progression détaillé',
+      'Mode bataille',
+      'Réseau social sécurisé',
+    ],
+  },
+  {
+    planId: 'family',
+    name: 'Famille',
+    children: 3,
+    childrenLabel: "Jusqu'à 3 enfants",
+    monthlyPrice: 5.0,
+    yearlyPrice: 50.0,
+    highlight: '1,67€ par enfant',
+    features: [
+      'Tous les cours et exercices',
+      'Suivi de progression avancé',
+      'Mode bataille',
+      'Réseau social sécurisé',
+    ],
+  },
+  {
+    planId: 'premium',
+    name: 'Premium',
+    children: 4,
+    childrenLabel: "Jusqu'à 4 enfants",
+    monthlyPrice: 6.0,
+    yearlyPrice: 60.0,
+    badge: 'Meilleure offre',
+    highlight: 'Support prioritaire inclus',
+    features: [
+      'Tous les cours et exercices',
+      'Suivi de progression avancé',
+      'Mode bataille',
+      'Réseau social sécurisé',
+      'Support prioritaire',
+    ],
+  },
 ];
 
 type RegistrationPageProps = {
@@ -37,9 +100,9 @@ type PendingRegistrationPayment = {
 const PENDING_REGISTRATION_KEY = 'pendingRegistrationPayment';
 
 export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: RegistrationPageProps) {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { user, profile, signIn, signInWithGoogle } = useAuth();
   const [step, setStep] = useState<'plan' | 'details' | 'payment'>('plan');
-  const [selectedChildren, setSelectedChildren] = useState(1);
+  const [selectedPlanId, setSelectedPlanId] = useState<PlanId>(initialPlanId ?? 'basic');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -58,7 +121,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [finalizingPayment, setFinalizingPayment] = useState(false);
   const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline } = useTrialConfig();
 
-  const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
+  const selectedPlan = useMemo(
+    () => PRICING_PLANS.find((plan) => plan.planId === selectedPlanId) ?? PRICING_PLANS[0],
+    [selectedPlanId]
+  );
+  const selectedChildren = selectedPlan.children;
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
 
   const promoExtraDays = useMemo(() => {
@@ -74,15 +141,62 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
+  const pricePerChild = price / selectedChildren;
+  const isAuthenticated = Boolean(user);
+  const isGoogleSignIn = user?.app_metadata?.provider === 'google';
+  const shouldSkipDetails = isAuthenticated && isGoogleSignIn;
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setFormData((prev) => {
+      const trimmedProfileName = profile?.full_name?.trim();
+      const metadataFullName = typeof user.user_metadata?.full_name === 'string'
+        ? user.user_metadata.full_name.trim()
+        : '';
+      const metadataName = typeof user.user_metadata?.name === 'string'
+        ? user.user_metadata.name.trim()
+        : '';
+
+      const resolvedFullName = trimmedProfileName && trimmedProfileName.length > 0
+        ? trimmedProfileName
+        : metadataFullName || metadataName || prev.fullName;
+
+      return {
+        ...prev,
+        email: user.email ?? prev.email,
+        fullName: resolvedFullName,
+      };
+    });
+  }, [user, profile]);
 
   useEffect(() => {
     if (!initialPlanId) return;
-    const plan = PRICING_PLANS.find(p => p.planId === initialPlanId);
+    const plan = PRICING_PLANS.find((p) => p.planId === initialPlanId);
     if (plan) {
-      setSelectedChildren(plan.children);
+      setSelectedPlanId(plan.planId);
+      if (step === 'plan') {
+        setStep(shouldSkipDetails ? 'payment' : 'details');
+      }
+    }
+  }, [initialPlanId, shouldSkipDetails, step]);
+
+  useEffect(() => {
+    if (shouldSkipDetails && step === 'details') {
+      setStep('payment');
+    }
+  }, [shouldSkipDetails, step]);
+
+  function handlePlanSelection(plan: PricingPlan) {
+    setSelectedPlanId(plan.planId);
+    if (shouldSkipDetails) {
+      setStep('payment');
+    } else {
       setStep('details');
     }
-  }, [initialPlanId]);
+  }
 
   async function validatePromoCode() {
     if (!formData.promoCode) {
@@ -331,12 +445,12 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-            <div className="flex items-center justify-center gap-4 mb-8">
+            <div className="flex items-center justify-center gap-4 mb-10">
               <button
                 onClick={() => setBillingPeriod('monthly')}
                 className={`px-6 py-3 rounded-xl font-semibold transition ${
                   billingPeriod === 'monthly'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-blue-500 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -346,7 +460,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 onClick={() => setBillingPeriod('yearly')}
                 className={`px-6 py-3 rounded-xl font-semibold transition relative ${
                   billingPeriod === 'yearly'
-                    ? 'bg-blue-500 text-white'
+                    ? 'bg-blue-500 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -357,41 +471,85 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               </button>
             </div>
 
-            <div className="mb-8">
-              <label className="block text-center text-lg font-semibold text-gray-700 mb-4">
-                Combien d'enfants souhaitez-vous inscrire ?
-              </label>
-              <div className="flex items-center justify-center gap-4">
-                <Users className="text-gray-400" size={24} />
-                <select
-                  value={selectedChildren}
-                  onChange={(e) => setSelectedChildren(Number(e.target.value))}
-                  className="text-2xl font-bold px-6 py-3 rounded-xl border-2 border-blue-300 focus:border-blue-500 focus:outline-none bg-white"
-                >
-                  {PRICING_PLANS.map(plan => (
-                    <option key={plan.children} value={plan.children}>
-                      {plan.children} {plan.children === 1 ? 'enfant' : 'enfants'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="text-center text-sm text-gray-500 mt-3">
-                Vous pourrez ajouter d'autres profils d'enfants à tout moment
-              </p>
-            </div>
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+              {PRICING_PLANS.map((plan) => {
+                const priceForPeriod = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                const perChild = priceForPeriod / plan.children;
+                const isSelected = plan.planId === selectedPlanId;
 
+                return (
+                  <div
+                    key={plan.planId}
+                    onClick={() => setSelectedPlanId(plan.planId)}
+                    className={`relative rounded-2xl border-2 p-6 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50/60 shadow-xl scale-[1.02]'
+                        : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-lg'
+                    }`}
+                  >
+                    {plan.badge && (
+                      <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl">
+                        {plan.badge}
+                      </div>
+                    )}
+                    <div className="text-center mb-6">
+                      <h3 className="text-2xl font-black text-gray-800 mb-2">{plan.name}</h3>
+                      <div className="flex items-baseline justify-center gap-1 mb-2">
+                        <span className={`text-4xl font-black ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
+                          {priceForPeriod.toFixed(2)}€
+                        </span>
+                        <span className="text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">{plan.childrenLabel}</p>
+                      {plan.highlight && (
+                        <div className="mt-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+                          <p className="text-xs text-green-700 font-semibold">{plan.highlight}</p>
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-3">
+                        Soit {perChild.toFixed(2)}€ par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                      </p>
+                    </div>
+                    <ul className="space-y-3 mb-6 text-sm text-gray-700">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2">
+                          <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handlePlanSelection(plan);
+                      }}
+                      className={`w-full py-3 rounded-xl font-bold transition ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:from-blue-600 hover:to-purple-600'
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                    >
+                      {shouldSkipDetails ? 'Choisir et passer au paiement' : 'Choisir ce plan'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
             <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 mb-6">
               <div className="text-center mb-6">
-                <div className="text-5xl font-bold text-gray-900 mb-2">
-                  {price.toFixed(2)} €
-                  <span className="text-2xl text-gray-600 font-normal">
-                    /{billingPeriod === 'monthly' ? 'mois' : 'an'}
-                  </span>
-                </div>
-                <div className="inline-block bg-green-500 text-white px-4 py-2 rounded-full font-semibold text-sm">
+                <div className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-full font-bold text-lg mb-4">
+                  <Sparkles size={20} />
                   Essai gratuit de {summaryTrialLabel}
                 </div>
-                <p className="text-sm text-gray-600 mt-3">
+                <div className="text-5xl font-bold text-gray-900 mb-2">
+                  0,00 €
+                  <span className="text-2xl text-gray-600 font-normal ml-2">aujourd'hui</span>
+                </div>
+                <p className="text-sm text-gray-600">
                   Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}
                 </p>
                 {promoValidation?.valid && (
@@ -401,92 +559,107 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 )}
               </div>
 
-              <ul className="space-y-3">
-                <li className="flex items-center gap-3 text-gray-700">
-                  <div className="bg-green-500 rounded-full p-1">
-                    <Check className="text-white" size={16} />
-                  </div>
-                  <span>Accès complet au programme scolaire français</span>
-                </li>
-                <li className="flex items-center gap-3 text-gray-700">
-                  <div className="bg-green-500 rounded-full p-1">
-                    <Check className="text-white" size={16} />
-                  </div>
-                  <span>Leçons interactives et quiz personnalisés</span>
-                </li>
-                <li className="flex items-center gap-3 text-gray-700">
-                  <div className="bg-green-500 rounded-full p-1">
-                    <Check className="text-white" size={16} />
-                  </div>
-                  <span>Suivi des progrès en temps réel</span>
-                </li>
-                <li className="flex items-center gap-3 text-gray-700">
-                  <div className="bg-green-500 rounded-full p-1">
-                    <Check className="text-white" size={16} />
-                  </div>
-                  <span>Système de gamification et récompenses</span>
-                </li>
-                <li className="flex items-center gap-3 text-gray-700">
-                  <div className="bg-green-500 rounded-full p-1">
-                    <Check className="text-white" size={16} />
-                  </div>
-                  <span>Support familial et réseau social sécurisé</span>
-                </li>
-              </ul>
+              <div className="grid md:grid-cols-2 gap-6 text-left">
+                <div>
+                  <p className="text-lg font-bold text-gray-800 mb-2">Plan sélectionné</p>
+                  <p className="text-xl text-gray-700 font-semibold">
+                    {selectedPlan.name} • {selectedPlan.childrenLabel}
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">
+                    {price.toFixed(2)} €<span className="text-xl text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
+                  </p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-gray-800 mb-2">Ce qui est inclus</p>
+                  <ul className="space-y-2 text-sm text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                        <Check className="text-white" size={16} />
+                      </div>
+                      <span>Accès complet au programme scolaire français</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                        <Check className="text-white" size={16} />
+                      </div>
+                      <span>Leçons interactives et quiz personnalisés</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                        <Check className="text-white" size={16} />
+                      </div>
+                      <span>Suivi des progrès en temps réel</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                        <Check className="text-white" size={16} />
+                      </div>
+                      <span>Réseau social sécurisé pour vos enfants</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             <button
-              onClick={() => setStep('details')}
+              onClick={() => handlePlanSelection(selectedPlan)}
               className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold rounded-xl hover:from-blue-600 hover:to-purple-600 transition flex items-center justify-center gap-2 text-lg"
             >
-              Continuer
+              {shouldSkipDetails ? 'Passer au paiement sécurisé' : `Continuer avec le plan ${selectedPlan.name}`}
               <ArrowRight size={20} />
             </button>
 
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">ou</span>
-              </div>
-            </div>
+            {!isAuthenticated && (
+              <>
+                <div className="relative my-6">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-4 bg-white text-gray-500">ou</span>
+                  </div>
+                </div>
 
-            <button
-              onClick={async () => {
-                setGoogleLoading(true);
-                try {
-                  await signInWithGoogle();
-                } catch (err: unknown) {
-                  console.error('Google sign in error:', err);
-                  alert(err instanceof Error ? err.message : 'Erreur lors de la connexion avec Google');
-                } finally {
-                  setGoogleLoading(false);
-                }
-              }}
-              disabled={googleLoading}
-              className="w-full py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition disabled:opacity-50 flex items-center justify-center gap-3"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              {googleLoading ? 'Connexion...' : 'Continuer avec Google'}
-            </button>
+                <button
+                  onClick={async () => {
+                    setGoogleLoading(true);
+                    try {
+                      await signInWithGoogle();
+                    } catch (err: unknown) {
+                      console.error('Google sign in error:', err);
+                      alert(err instanceof Error ? err.message : 'Erreur lors de la connexion avec Google');
+                    } finally {
+                      setGoogleLoading(false);
+                    }
+                  }}
+                  disabled={googleLoading}
+                  className="w-full py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition disabled:opacity-50 flex items-center justify-center gap-3"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                  {googleLoading ? 'Connexion...' : 'Continuer avec Google'}
+                </button>
+              </>
+            )}
           </div>
 
           <p className="text-center text-sm text-gray-500">
@@ -532,7 +705,8 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Plan sélectionné</p>
-                  <p className="text-xl font-bold text-gray-900">{planDetails.children} enfant{planDetails.children > 1 ? 's' : ''}</p>
+                  <p className="text-xl font-bold text-gray-900">{planDetails.name}</p>
+                  <p className="text-sm text-gray-600">{planDetails.childrenLabel}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Après l'essai</p>
@@ -604,7 +778,10 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Créez votre compte</h2>
             <p className="text-gray-600">
-              {selectedChildren} {selectedChildren === 1 ? 'enfant' : 'enfants'} - {price.toFixed(2)} €/{billingPeriod === 'monthly' ? 'mois' : 'an'}
+              Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/{billingPeriod === 'monthly' ? 'mois' : 'an'}
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
             </p>
             <p className="text-xs text-green-600 mt-1">
               Essai gratuit de {summaryTrialLabel} • Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}

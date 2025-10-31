@@ -367,6 +367,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signInWithGoogle() {
+    try {
+      localStorage.setItem('pendingGoogleRegistration', 'true');
+    } catch (storageError) {
+      console.warn('Unable to persist Google registration flag:', storageError);
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
