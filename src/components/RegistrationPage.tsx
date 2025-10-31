@@ -160,6 +160,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     const pending = getPendingRegistration();
     return Boolean(pending);
   });
+  const [hasManuallyResetPlanSelection, setHasManuallyResetPlanSelection] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
 
@@ -215,7 +216,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }, [user, profile]);
 
   useEffect(() => {
-    if (!initialPlanId) return;
+    if (!initialPlanId || hasManuallyResetPlanSelection) return;
     const plan = PRICING_PLANS.find((p) => p.planId === initialPlanId);
     if (plan) {
       setSelectedPlanId(plan.planId);
@@ -223,7 +224,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         setStep(shouldSkipDetails || hasCompletedAccountCreation ? 'payment' : 'details');
       }
     }
-  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step]);
+  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step, hasManuallyResetPlanSelection]);
 
   useEffect(() => {
     if ((shouldSkipDetails || hasCompletedAccountCreation) && step === 'details') {
@@ -234,6 +235,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   function handlePlanSelection(plan: PricingPlan) {
     setSelectedPlanId(plan.planId);
     setPlanStatusMessage('');
+    setHasManuallyResetPlanSelection(false);
     if (shouldSkipDetails || hasCompletedAccountCreation) {
       setStep('payment');
     } else {
@@ -498,20 +500,18 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }
 
   function handleReturnToPlans() {
-    const pending = getPendingRegistration();
-    if (pending) {
-      setSelectedPlanId(pending.planId);
-      setBillingPeriod(pending.billingPeriod);
-    }
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
+    setSelectedPlanId('basic');
+    setBillingPeriod('monthly');
     setPaymentError('');
     setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
     setPaymentLoading(false);
     setFinalizingPayment(false);
     setStep('plan');
     setHasCompletedAccountCreation(true);
+    setHasManuallyResetPlanSelection(true);
   }
 
   function clearPendingRegistrationState() {
