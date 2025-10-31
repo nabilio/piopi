@@ -139,6 +139,7 @@ function AppContent() {
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
   const [childBirthdaysChildId, setChildBirthdaysChildId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'security' | 'notifications' | 'subscription' | 'children'>('profile');
+  const [processedGoogleRegistration, setProcessedGoogleRegistration] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -185,6 +186,52 @@ function AppContent() {
       setShowRegistration(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setProcessedGoogleRegistration(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    async function handlePendingGoogleRegistration() {
+      if (!user || !profile || processedGoogleRegistration) {
+        return;
+      }
+
+      const pendingGoogle = localStorage.getItem('pendingGoogleRegistration');
+      if (pendingGoogle !== 'true') {
+        return;
+      }
+
+      setProcessedGoogleRegistration(true);
+
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error checking subscription for Google registration:', error);
+        }
+
+        if (!error && !data) {
+          setRegistrationPlanId(null);
+          setShowRegistration(true);
+        }
+      } catch (error) {
+        console.error('Failed to process pending Google registration:', error);
+        setRegistrationPlanId(null);
+        setShowRegistration(true);
+      } finally {
+        localStorage.removeItem('pendingGoogleRegistration');
+      }
+    }
+
+    handlePendingGoogleRegistration();
+  }, [user, profile, processedGoogleRegistration]);
 
   useEffect(() => {
       if (!user) {
