@@ -155,6 +155,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [paymentError, setPaymentError] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [finalizingPayment, setFinalizingPayment] = useState(false);
+  const [planStatusMessage, setPlanStatusMessage] = useState('');
+  const [hasCompletedAccountCreation, setHasCompletedAccountCreation] = useState(() => {
+    const pending = getPendingRegistration();
+    return Boolean(pending);
+  });
   const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
 
   const selectedPlan = useMemo(
@@ -214,20 +219,21 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (plan) {
       setSelectedPlanId(plan.planId);
       if (step === 'plan') {
-        setStep(shouldSkipDetails ? 'payment' : 'details');
+        setStep(shouldSkipDetails || hasCompletedAccountCreation ? 'payment' : 'details');
       }
     }
-  }, [initialPlanId, shouldSkipDetails, step]);
+  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step]);
 
   useEffect(() => {
-    if (shouldSkipDetails && step === 'details') {
+    if ((shouldSkipDetails || hasCompletedAccountCreation) && step === 'details') {
       setStep('payment');
     }
-  }, [shouldSkipDetails, step]);
+  }, [shouldSkipDetails, hasCompletedAccountCreation, step]);
 
   function handlePlanSelection(plan: PricingPlan) {
     setSelectedPlanId(plan.planId);
-    if (shouldSkipDetails) {
+    setPlanStatusMessage('');
+    if (shouldSkipDetails || hasCompletedAccountCreation) {
       setStep('payment');
     } else {
       setStep('details');
@@ -315,6 +321,8 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
 
       localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(pending));
       setPaymentError('');
+      setPlanStatusMessage('');
+      setHasCompletedAccountCreation(true);
       setStep('payment');
     } catch (err: unknown) {
       console.error('Registration error:', err);
@@ -326,6 +334,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }
 
   function getPendingRegistration(): PendingRegistrationPayment | null {
+    if (typeof window === 'undefined') {
+      return null;
+    }
     const raw = localStorage.getItem(PENDING_REGISTRATION_KEY);
     if (!raw) return null;
     try {
@@ -407,8 +418,15 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         setPaymentError('Impossible de retrouver la session de paiement.');
       }
     } else if (registrationStatus === 'cancel') {
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
-      setPaymentError('Le paiement a été annulé.');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      }
+      setHasCompletedAccountCreation(true);
+      setPaymentError('');
+      setPlanStatusMessage('Le paiement a été annulé. Vous pouvez choisir un plan avant de réessayer.');
+      setPaymentLoading(false);
+      setFinalizingPayment(false);
+      setStep('plan');
     }
 
     params.delete('registration_payment');
@@ -420,13 +438,19 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
 
   useEffect(() => {
     const pending = getPendingRegistration();
-    if (pending && step !== 'payment') {
-      setStep('payment');
+    if (pending) {
+      setHasCompletedAccountCreation(true);
+      setSelectedPlanId(pending.planId);
+      setBillingPeriod(pending.billingPeriod);
+      if (step !== 'payment') {
+        setStep('payment');
+      }
     }
   }, [step]);
 
   async function handleStartPayment() {
     setPaymentError('');
+    setPlanStatusMessage('');
     setPaymentLoading(true);
 
     try {
@@ -472,6 +496,23 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     }
   }
 
+  function handleReturnToPlans() {
+    const pending = getPendingRegistration();
+    if (pending) {
+      setSelectedPlanId(pending.planId);
+      setBillingPeriod(pending.billingPeriod);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+    }
+    setPaymentError('');
+    setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
+    setPaymentLoading(false);
+    setFinalizingPayment(false);
+    setStep('plan');
+    setHasCompletedAccountCreation(true);
+  }
+
   if (step === 'plan') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
@@ -486,6 +527,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+            {planStatusMessage && (
+              <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-200 text-blue-800 rounded-xl">
+                {planStatusMessage}
+              </div>
+            )}
             <div className="flex items-center justify-center gap-4 mb-10">
               <button
                 onClick={() => setBillingPeriod('monthly')}
@@ -725,7 +771,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         <div className="max-w-2xl mx-auto">
           <button
             onClick={() => {
-              localStorage.removeItem(PENDING_REGISTRATION_KEY);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem(PENDING_REGISTRATION_KEY);
+              }
               onCancel();
             }}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold mb-6"
@@ -779,6 +827,14 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 </div>
               </div>
             </div>
+
+            <button
+              onClick={handleReturnToPlans}
+              disabled={paymentLoading || finalizingPayment}
+              className="w-full mb-4 py-3 border-2 border-blue-500 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition disabled:opacity-50"
+            >
+              Revenir au choix des plans
+            </button>
 
             <button
               onClick={handleStartPayment}
