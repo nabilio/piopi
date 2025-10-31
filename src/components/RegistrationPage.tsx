@@ -115,7 +115,7 @@ type PendingRegistrationPayment = {
   billingPeriod: 'monthly' | 'yearly';
 };
 
-const PENDING_REGISTRATION_KEY = 'pendingRegistrationPayment';
+export const PENDING_REGISTRATION_STORAGE_KEY = 'pendingRegistrationPayment';
 const LAST_COMPLETED_REGISTRATION_KEY = 'lastCompletedRegistrationPlan';
 
 type CompletedRegistrationPlan = {
@@ -319,7 +319,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod,
       };
 
-      localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(pending));
+      localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(pending));
       setPaymentError('');
       setPlanStatusMessage('');
       setHasCompletedAccountCreation(true);
@@ -337,13 +337,13 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (typeof window === 'undefined') {
       return null;
     }
-    const raw = localStorage.getItem(PENDING_REGISTRATION_KEY);
+    const raw = localStorage.getItem(PENDING_REGISTRATION_STORAGE_KEY);
     if (!raw) return null;
     try {
       return JSON.parse(raw) as PendingRegistrationPayment;
     } catch (parseError) {
       console.error('Failed to parse pending registration data:', parseError);
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
       return null;
     }
   }
@@ -388,7 +388,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod: pending.billingPeriod,
       });
 
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
       onSuccess();
     } catch (err: unknown) {
       console.error('Erreur lors de la validation du paiement:', err);
@@ -419,7 +419,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       }
     } else if (registrationStatus === 'cancel') {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(PENDING_REGISTRATION_KEY);
+        localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
       }
       setHasCompletedAccountCreation(true);
       setPaymentError('');
@@ -463,7 +463,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           fullName: formData.fullName,
           billingPeriod,
         };
-        localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(basePending));
+        localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(basePending));
       }
 
       const successUrl = `${window.location.origin}/?registration_payment=success&session_id={CHECKOUT_SESSION_ID}`;
@@ -484,7 +484,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         billingPeriod,
         sessionId: response.sessionId,
       };
-      localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(pendingData));
+      localStorage.setItem(PENDING_REGISTRATION_STORAGE_KEY, JSON.stringify(pendingData));
 
       window.location.href = response.url;
     } catch (err: unknown) {
@@ -503,7 +503,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       setBillingPeriod(pending.billingPeriod);
     }
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(PENDING_REGISTRATION_KEY);
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
     setPaymentError('');
     setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
@@ -511,6 +511,17 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     setFinalizingPayment(false);
     setStep('plan');
     setHasCompletedAccountCreation(true);
+  }
+
+  function handleExitRegistration() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+    }
+    setPaymentError('');
+    setPlanStatusMessage('');
+    setPaymentLoading(false);
+    setFinalizingPayment(false);
+    onCancel();
   }
 
   if (step === 'plan') {
@@ -769,18 +780,21 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem(PENDING_REGISTRATION_KEY);
-              }
-              onCancel();
-            }}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold mb-6"
-          >
-            <X size={20} />
-            Annuler l'inscription
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <button
+              onClick={handleReturnToPlans}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
+            >
+              <X size={20} />
+              Retourner au choix des plans
+            </button>
+            <button
+              onClick={handleExitRegistration}
+              className="text-sm text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
+            >
+              Quitter l'inscription
+            </button>
+          </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center mb-6">
