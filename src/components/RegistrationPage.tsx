@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, Sparkles, Home, LogOut } from 'lucide-react';
+import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, Home, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
@@ -234,8 +234,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     baseTrialDays,
     formattedBaseTrial,
     promoBanner,
-    reassuranceCopy,
-    paymentReminder,
     securityMessage,
   } = useTrialConfig();
 
@@ -935,7 +933,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-6xl mx-auto">
-          {renderStepIndicator('plan')}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -967,9 +964,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
               Commencez votre aventure d'apprentissage
             </h1>
-            <p className="text-xl text-gray-600">{reassuranceCopy}</p>
-            <p className="text-sm text-gray-500 mt-2">{paymentReminder}</p>
-            <p className="text-sm text-gray-500">{securityMessage}</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-blue-100">
@@ -1086,7 +1080,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                           : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                       }`}
                     >
-                      {shouldSkipDetails ? 'Choisir et passer au paiement sécurisé' : 'Choisir ce plan'}
+                      {shouldSkipDetails ? 'Choisir' : 'Choisir ce plan'}
                     </button>
                   </div>
                 );
@@ -1095,78 +1089,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 mb-6">
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-full font-bold text-lg mb-4">
-                  <Sparkles size={20} />
-                  Essai gratuit de {summaryTrialLabel}
-                </div>
-                <div className="text-5xl font-bold text-gray-900 mb-2">
-                  0,00 €
-                  <span className="text-2xl text-gray-600 font-normal ml-2">aujourd'hui</span>
-                </div>
-                <p className="text-sm text-gray-600">{dynamicPaymentReminder}</p>
-                <p className="text-sm text-gray-600">{cancellationMessage}</p>
-                <p className="text-sm text-gray-600">{securityMessage}</p>
-                {promoValidation?.valid && (
-                  <p className="text-xs text-green-700 mt-1">
-                    Code promo appliqué : votre essai total dure {formattedTotalTrial}.
-                  </p>
-                )}
-              </div>
-
-              {selectedPlan ? (
-                <div className="grid md:grid-cols-2 gap-6 text-left">
-                  <div>
-                    <p className="text-lg font-bold text-gray-800 mb-2">Plan sélectionné</p>
-                    <p className="text-xl text-gray-700 font-semibold">
-                      {selectedPlan.name} • {selectedPlan.childrenLabel}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">
-                      {price.toFixed(2)} €<span className="text-xl text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
-                    </p>
-                    <p className="text-sm text-blue-700 mt-1">
-                      Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-gray-800 mb-2">Ce qui est inclus</p>
-                    <ul className="space-y-2 text-sm text-gray-700">
-                      <li className="flex items-start gap-2">
-                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                          <Check className="text-white" size={16} />
-                        </div>
-                        <span>Accès complet au programme scolaire français</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                          <Check className="text-white" size={16} />
-                        </div>
-                        <span>Leçons interactives et quiz personnalisés</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                          <Check className="text-white" size={16} />
-                        </div>
-                        <span>Suivi des progrès en temps réel</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                          <Check className="text-white" size={16} />
-                        </div>
-                        <span>Réseau social sécurisé pour vos enfants</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-gray-600">
-                  <p className="text-base font-semibold">Choisissez un plan pour afficher ses détails.</p>
-                  <p className="text-sm mt-2">Sélectionnez une offre ci-dessus pour découvrir le récapitulatif et continuer.</p>
-                </div>
-              )}
-            </div>
-
             <button
               onClick={() => selectedPlan && handlePlanSelection(selectedPlan)}
               disabled={!selectedPlan}
@@ -1178,7 +1100,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             >
               {selectedPlan
                 ? shouldSkipDetails
-                  ? 'Passer au paiement sécurisé'
+                  ? 'Continuer'
                   : `Continuer avec le plan ${selectedPlan.name}`
                 : 'Choisissez un plan pour continuer'}
               {selectedPlan && <ArrowRight size={20} />}
