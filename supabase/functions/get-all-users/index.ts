@@ -87,8 +87,46 @@ Deno.serve(async (req: Request) => {
 
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
+    const subscriptionMap = new Map<string, any>();
+    const latestPaymentMap = new Map<string, any>();
+
+    if (userIds.length > 0) {
+      const { data: subscriptionData, error: subscriptionError } = await supabaseAdmin
+        .from("subscriptions")
+        .select("user_id, status, plan_type, trial_end_date, subscription_end_date, subscription_start_date")
+        .in("user_id", userIds);
+
+      if (subscriptionError) {
+        throw subscriptionError;
+      }
+
+      subscriptionData?.forEach(subscription => {
+        if (subscription?.user_id) {
+          subscriptionMap.set(subscription.user_id, subscription);
+        }
+      });
+
+      const { data: paymentData, error: paymentError } = await supabaseAdmin
+        .from("subscription_payments")
+        .select("user_id, payment_status, payment_date")
+        .in("user_id", userIds)
+        .order("payment_date", { ascending: false });
+
+      if (paymentError) {
+        throw paymentError;
+      }
+
+      paymentData?.forEach(payment => {
+        if (payment?.user_id && !latestPaymentMap.has(payment.user_id)) {
+          latestPaymentMap.set(payment.user_id, payment);
+        }
+      });
+    }
+
     const usersWithProfiles = authUsers.users.map(authUser => {
       const profile = profileMap.get(authUser.id);
+      const subscription = subscriptionMap.get(authUser.id);
+      const latestPayment = latestPaymentMap.get(authUser.id);
       return {
         id: authUser.id,
         email: authUser.email || "N/A",
@@ -102,6 +140,13 @@ Deno.serve(async (req: Request) => {
         banned: profile?.banned || false,
         email_confirmed: authUser.email_confirmed_at ? true : false,
         email_confirmed_at: authUser.email_confirmed_at || null,
+        subscription_status: subscription?.status ?? null,
+        subscription_plan_type: subscription?.plan_type ?? null,
+        subscription_trial_end_date: subscription?.trial_end_date ?? null,
+        subscription_start_date: subscription?.subscription_start_date ?? null,
+        subscription_end_date: subscription?.subscription_end_date ?? null,
+        last_payment_status: latestPayment?.payment_status ?? null,
+        last_payment_date: latestPayment?.payment_date ?? null,
       };
     });
 
