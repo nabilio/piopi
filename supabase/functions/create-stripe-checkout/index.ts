@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
     };
 
     if (trialPeriodDays > 0) {
-      subscriptionData.payment_behavior = 'default_incomplete';
+      subscriptionData.payment_behavior = 'allow_incomplete';
     }
 
     const session = await stripe.checkout.sessions.create({
