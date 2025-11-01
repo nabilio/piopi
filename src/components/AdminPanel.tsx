@@ -112,6 +112,13 @@ type SubscriptionRecord = {
   trial_end_date?: string | null;
 };
 
+type SubscriptionRecord = {
+  plan_type: string;
+  status: string;
+  subscription_end_date: string | null;
+  trial_end_date?: string | null;
+};
+
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
 type StatusBadgeInfo = {

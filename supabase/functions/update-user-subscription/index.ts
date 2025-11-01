@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: existingSubscription, error: existingError } = await supabaseAdmin
       .from("subscriptions")
-      .select("id, subscription_start_date, trial_start_date, trial_end_date")
+      .select("id, subscription_start_date, trial_start_date, trial_end_date, status")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -157,25 +157,21 @@ Deno.serve(async (req: Request) => {
     let subscription;
 
     if (existingSubscription) {
+      const normalizedTrialStart = existingSubscription.trial_start_date ?? nowIso;
+      const normalizedTrialEnd = existingSubscription.trial_end_date ?? nowIso;
+      const normalizedSubscriptionStart = existingSubscription.subscription_start_date ?? nowIso;
+
       const updates: Record<string, unknown> = {
         plan_type: planType,
         subscription_end_date: endDateIso,
         status,
         children_count: billedChildren,
         price,
+        updated_at: nowIso,
+        subscription_start_date: normalizedSubscriptionStart,
+        trial_start_date: normalizedTrialStart,
+        trial_end_date: normalizedTrialEnd,
       };
-
-      if (!existingSubscription.subscription_start_date) {
-        updates.subscription_start_date = nowIso;
-      }
-
-      if (!existingSubscription.trial_start_date) {
-        updates.trial_start_date = nowIso;
-      }
-
-      if (!existingSubscription.trial_end_date) {
-        updates.trial_end_date = nowIso;
-      }
 
       const { data: updatedSubscription, error: updateError } = await supabaseAdmin
         .from("subscriptions")
