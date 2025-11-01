@@ -4,10 +4,8 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
 import {
-  createPaypalOrder,
   createStripeCheckout,
   verifyStripeCheckout,
-  capturePaypalOrder,
 } from '../utils/payment';
 
 type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
@@ -35,9 +33,7 @@ type SubscriptionRecord = {
 
 type PendingUpgradePayload = {
   planId: PlanId;
-  method: 'stripe' | 'paypal';
   sessionId?: string;
-  orderId?: string;
   billedChildren?: number;
 };
 
@@ -172,13 +168,10 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
   const [paymentInProgress, setPaymentInProgress] = useState(false);
   const [pendingFinalization, setPendingFinalization] = useState<null | {
-    method: 'stripe' | 'paypal';
     planId: PlanId;
     sessionId?: string;
-    orderId?: string;
     billedChildren?: number;
   }>(null);
-  const [activePaymentProvider, setActivePaymentProvider] = useState<'stripe' | 'paypal' | null>(null);
 
   const recordedChildrenCount = subscription?.children_count ?? 0;
   const effectiveChildrenCount = Math.max(currentChildrenCount, recordedChildrenCount, 1);
@@ -243,11 +236,10 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
 
   const finalizeUpgrade = useCallback(async (
     plan: Plan,
-    paymentMethod: 'stripe' | 'paypal' | 'manual',
+    paymentMethod: 'stripe' | 'manual',
     options?: {
       billedChildren?: number;
       sessionId?: string;
-      orderId?: string;
     }
   ) => {
     if (!plan) return;
@@ -271,13 +263,6 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         const verification = await verifyStripeCheckout(options.sessionId);
         if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
           throw new Error('Le paiement Stripe n\'est pas confirmé');
-        }
-      }
-
-      if (paymentMethod === 'paypal' && options?.orderId) {
-        const capture = await capturePaypalOrder(options.orderId);
-        if (capture.status !== 'COMPLETED') {
-          throw new Error('La capture PayPal a échoué');
         }
       }
 
@@ -410,24 +395,22 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
       setLoading(false);
       setConfirming(false);
       setPaymentInProgress(false);
-      setActivePaymentProvider(null);
     }
   }, [currentPlan, currentChildrenCount, onSuccess, profile?.email, profile?.full_name, profile?.parent_id, profile?.role, showToast, subscription, user?.email, user?.id]);
 
-  const initiatePayment = useCallback(async (method: 'stripe' | 'paypal') => {
+  const initiateStripePayment = useCallback(async () => {
     if (!selectedPlan || !subscription) return;
 
     setPaymentInProgress(true);
-    setActivePaymentProvider(method);
 
     try {
       const successUrl = new URL(window.location.href);
       successUrl.searchParams.set('payment_status', 'success');
-      successUrl.searchParams.set('provider', method);
+      successUrl.searchParams.set('provider', 'stripe');
 
       const cancelUrl = new URL(window.location.href);
       cancelUrl.searchParams.set('payment_status', 'cancel');
-      cancelUrl.searchParams.set('provider', method);
+      cancelUrl.searchParams.set('provider', 'stripe');
 
       const baseOptions = {
         planId: selectedPlan.id,
@@ -436,57 +419,44 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         cancelUrl: cancelUrl.toString(),
       };
 
-      if (method === 'stripe') {
-        const response = await createStripeCheckout(baseOptions);
+      const response = await createStripeCheckout(baseOptions);
 
-        localStorage.setItem('pendingUpgrade', JSON.stringify({
-          planId: selectedPlan.id,
-          method,
-          sessionId: response.sessionId,
-          billedChildren: response.billedChildren,
-        }));
+      localStorage.setItem('pendingUpgrade', JSON.stringify({
+        planId: selectedPlan.id,
+        sessionId: response.sessionId,
+        billedChildren: response.billedChildren,
+      }));
 
-        window.location.href = response.url;
-      } else {
-        const response = await createPaypalOrder(baseOptions);
-
-        localStorage.setItem('pendingUpgrade', JSON.stringify({
-          planId: selectedPlan.id,
-          method,
-          orderId: response.orderId,
-          billedChildren: response.billedChildren,
-        }));
-
-        window.location.href = response.approvalUrl;
-      }
+      window.location.href = response.url;
     } catch (error: unknown) {
       console.error('Payment initiation error:', error);
       const message = error instanceof Error ? error.message : 'Impossible de lancer le paiement';
       showToast(message, 'error');
       setPaymentInProgress(false);
-      setActivePaymentProvider(null);
     }
   }, [effectiveChildrenCount, selectedPlan, showToast, subscription]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentStatus = params.get('payment_status');
-    const provider = params.get('provider') as 'stripe' | 'paypal' | null;
+    const provider = params.get('provider');
     const sessionId = params.get('session_id') || undefined;
-    const orderId = params.get('token') || undefined;
 
     if (paymentStatus) {
       const pendingRaw = localStorage.getItem('pendingUpgrade');
-      if (paymentStatus === 'success' && provider && pendingRaw) {
+      if (paymentStatus === 'success' && pendingRaw) {
         try {
           const pending = JSON.parse(pendingRaw) as PendingUpgradePayload;
           setPaymentInProgress(false);
-          setActivePaymentProvider(null);
+          if (provider && provider !== 'stripe') {
+            console.warn('Unexpected payment provider, clearing pending upgrade.');
+            localStorage.removeItem('pendingUpgrade');
+            return;
+          }
+
           setPendingFinalization({
-            method: provider,
             planId: pending.planId,
             sessionId: sessionId ?? pending.sessionId,
-            orderId: orderId ?? pending.orderId,
             billedChildren: pending.billedChildren,
           });
         } catch (error) {
@@ -496,13 +466,11 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
         showToast('Paiement annulé.', 'warning');
         localStorage.removeItem('pendingUpgrade');
         setPaymentInProgress(false);
-        setActivePaymentProvider(null);
       }
 
       params.delete('payment_status');
       params.delete('provider');
       params.delete('session_id');
-      params.delete('token');
       const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
       window.history.replaceState({}, document.title, newUrl);
     }
@@ -517,15 +485,13 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
       localStorage.removeItem('pendingUpgrade');
       setPendingFinalization(null);
       setPaymentInProgress(false);
-      setActivePaymentProvider(null);
       return;
     }
 
     setSelectedPlan(plan);
-    finalizeUpgrade(plan, pendingFinalization.method, {
+    finalizeUpgrade(plan, 'stripe', {
       billedChildren: pendingFinalization.billedChildren,
       sessionId: pendingFinalization.sessionId,
-      orderId: pendingFinalization.orderId,
     });
   }, [finalizeUpgrade, pendingFinalization]);
 
@@ -599,34 +565,24 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
                 <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl text-purple-800 text-sm">
                   <p className="font-semibold mb-1">Paiement requis</p>
                   <p>
-                    Choisissez votre moyen de paiement sécurisé pour finaliser la mise à jour de votre abonnement.
+                    Finalisez votre mise à jour avec notre paiement sécurisé par carte bancaire (Stripe).
                   </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <button
-                    onClick={() => initiatePayment('stripe')}
+                    onClick={initiateStripePayment}
                     disabled={paymentInProgress || loading}
                     className="flex items-center justify-center gap-2 py-4 bg-black text-white font-semibold rounded-xl hover:bg-gray-900 transition disabled:opacity-60"
                   >
-                    {paymentInProgress && activePaymentProvider === 'stripe'
-                      ? 'Redirection vers Stripe...'
-                      : 'Payer par carte bancaire'}
-                  </button>
-                  <button
-                    onClick={() => initiatePayment('paypal')}
-                    disabled={paymentInProgress || loading}
-                    className="flex items-center justify-center gap-2 py-4 bg-[#FFC439] text-gray-900 font-semibold rounded-xl hover:bg-[#f7b500] transition disabled:opacity-60"
-                  >
-                    {paymentInProgress && activePaymentProvider === 'paypal'
-                      ? 'Redirection vers PayPal...'
-                      : 'Payer avec PayPal'}
+                    {paymentInProgress
+                      ? 'Redirection vers le paiement sécurisé...'
+                      : 'Payer par carte bancaire sécurisée'}
                   </button>
                 </div>
                 <button
                   onClick={() => {
                     setConfirming(false);
                     setPaymentInProgress(false);
-                    setActivePaymentProvider(null);
                   }}
                   disabled={loading}
                   className="w-full py-4 border-2 border-gray-300 text-gray-700 font-bold rounded-xl hover:border-gray-400 transition disabled:opacity-50"

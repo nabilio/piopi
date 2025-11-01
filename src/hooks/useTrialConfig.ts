@@ -139,7 +139,7 @@ export function useTrialConfig() {
 
   const reassuranceCopy = `Profitez de ${formattedBaseTrial} d'essai gratuit, sans engagement.`;
   const paymentReminder = "Vous ne serez facturé(e) qu'après la fin de votre période d'essai si vous continuez.";
-  const securityMessage = 'Paiements 100% sécurisés via Stripe et PayPal.';
+  const securityMessage = 'Paiements 100% sécurisés via Stripe.';
 
   const promoBanner = reassuranceCopy;
 
