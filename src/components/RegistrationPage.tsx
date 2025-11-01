@@ -1213,20 +1213,15 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center mb-6">
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Plan sélectionné</h2>
-              <p className="text-gray-600">
-                Validez votre essai gratuit pour {childrenCount} {childrenCount > 1 ? 'enfants' : 'enfant'}.
-              </p>
             </div>
 
             <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Plan sélectionné</p>
                   <p className="text-xl font-bold text-gray-900">{planDetails.name}</p>
                   <p className="text-sm text-gray-600">{planDetails.childrenLabel}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600">Après l'essai</p>
                   <p className="text-2xl font-bold text-gray-900">{formattedPrice} €/{billingPeriodLabel}</p>
                 </div>
               </div>
