@@ -139,6 +139,45 @@ const INITIAL_SUBSCRIPTION_MODAL: SubscriptionModalState = {
   success: null,
 };
 
+type SubscriptionRecord = {
+  plan_type: string;
+  status: string;
+  subscription_end_date: string | null;
+  trial_end_date?: string | null;
+};
+
+type SubscriptionModalState = {
+  isOpen: boolean;
+  loading: boolean;
+  saving: boolean;
+  user: Profile | null;
+  planType: string;
+  activationEndDate: string;
+  status: string;
+  error: string | null;
+  success: string | null;
+};
+
+const ADMIN_PLAN_OPTIONS: { value: string; label: string }[] = [
+  { value: 'basic', label: 'Basique • 1 enfant' },
+  { value: 'duo', label: 'Duo • 2 enfants' },
+  { value: 'family', label: 'Famille • 3 enfants' },
+  { value: 'premium', label: 'Premium • 4 enfants' },
+  { value: 'liberte', label: 'Liberté • 5+ enfants' },
+];
+
+const INITIAL_SUBSCRIPTION_MODAL: SubscriptionModalState = {
+  isOpen: false,
+  loading: false,
+  saving: false,
+  user: null,
+  planType: 'basic',
+  activationEndDate: '',
+  status: 'inactive',
+  error: null,
+  success: null,
+};
+
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
 type StatusBadgeInfo = {

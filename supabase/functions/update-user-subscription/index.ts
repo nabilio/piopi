@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: existingSubscription, error: existingError } = await supabaseAdmin
       .from("subscriptions")
-      .select("id, subscription_start_date")
+      .select("id, subscription_start_date, trial_start_date, trial_end_date")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -167,6 +167,14 @@ Deno.serve(async (req: Request) => {
 
       if (!existingSubscription.subscription_start_date) {
         updates.subscription_start_date = nowIso;
+      }
+
+      if (!existingSubscription.trial_start_date) {
+        updates.trial_start_date = nowIso;
+      }
+
+      if (!existingSubscription.trial_end_date) {
+        updates.trial_end_date = nowIso;
       }
 
       const { data: updatedSubscription, error: updateError } = await supabaseAdmin
@@ -201,8 +209,8 @@ Deno.serve(async (req: Request) => {
         status,
         children_count: billedChildren,
         price,
-        trial_start_date: null,
-        trial_end_date: null,
+        trial_start_date: nowIso,
+        trial_end_date: nowIso,
         promo_code: null,
         promo_months_remaining: 0,
       };
