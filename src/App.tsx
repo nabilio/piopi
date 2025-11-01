@@ -57,6 +57,12 @@ import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
 import type { PlanId } from './utils/payment';
 import { RegistrationPage, PENDING_REGISTRATION_STORAGE_KEY } from './components/RegistrationPage';
+import {
+  isMissingColumnError,
+  shouldAttemptLegacySubscriptionLookup,
+  recordLegacySubscriptionLookupFailure,
+  recordLegacySubscriptionLookupSuccess,
+} from './utils/subscriptionLegacy';
 
 const isMissingColumnError = (candidate: unknown): candidate is { code?: string } =>
   typeof candidate === 'object' && candidate !== null && 'code' in candidate && (candidate as { code?: string }).code === '42703';
@@ -286,12 +292,10 @@ function AppContent() {
 
         type SubscriptionRecord = { status: string | null; subscription_start_date: string | null } | null;
         let subscriptionRecord: SubscriptionRecord = null;
-        let shouldAttemptLegacyLookup = false;
+        const shouldAttemptLegacyLookup = error ? shouldAttemptLegacySubscriptionLookup(error) : false;
 
         if (error) {
-          if (isMissingColumnError(error)) {
-            shouldAttemptLegacyLookup = true;
-          } else {
+          if (!shouldAttemptLegacyLookup) {
             throw error;
           }
         } else {
@@ -306,11 +310,15 @@ function AppContent() {
             .maybeSingle();
 
           if (legacyError) {
+            recordLegacySubscriptionLookupFailure(legacyError);
             if (!isMissingColumnError(legacyError)) {
               throw legacyError;
             }
           } else {
             subscriptionRecord = legacyRecord ?? null;
+            if (subscriptionRecord) {
+              recordLegacySubscriptionLookupSuccess();
+            }
           }
         }
 

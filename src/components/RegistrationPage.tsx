@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 import { createStripeCheckout, verifyStripeCheckout, type PlanId } from '../utils/payment';
+import {
+  isMissingColumnError,
+  shouldAttemptLegacySubscriptionLookup,
+  recordLegacySubscriptionLookupFailure,
+  recordLegacySubscriptionLookupSuccess,
+} from '../utils/subscriptionLegacy';
 
 type PricingPlan = {
   planId: PlanId;
@@ -419,18 +425,16 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       let subscriptionRecord: SubscriptionRecord | null = null;
       let subscriptionKey: 'user_id' | 'parent_id' = 'user_id';
       const subscriptionLookupErrors: unknown[] = [];
-      let shouldAttemptLegacyLookup = false;
-
       const { data, error } = await supabase
         .from('subscriptions')
         .select<SubscriptionRecord>('id, trial_end_date')
         .eq('user_id', user.id)
         .maybeSingle();
 
+      const shouldAttemptLegacyLookup = error ? shouldAttemptLegacySubscriptionLookup(error) : false;
+
       if (error) {
-        if (isMissingColumnError(error)) {
-          shouldAttemptLegacyLookup = true;
-        } else {
+        if (!shouldAttemptLegacyLookup) {
           subscriptionLookupErrors.push(error);
         }
       } else if (data) {
@@ -445,12 +449,42 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           .maybeSingle();
 
         if (legacyError) {
+          recordLegacySubscriptionLookupFailure(legacyError);
           if (!isMissingColumnError(legacyError)) {
             subscriptionLookupErrors.push(legacyError);
           }
         } else if (legacyData) {
           subscriptionRecord = legacyData;
           subscriptionKey = 'parent_id';
+          recordLegacySubscriptionLookupSuccess();
+        }
+      }
+
+      if (!subscriptionRecord && subscriptionLookupErrors.length === 0) {
+        try {
+          const trialEndDate = new Date(firstChargeDate);
+          const { data: insertedRecord, error: insertError } = await supabase
+            .from('subscriptions')
+            .insert({
+              user_id: user.id,
+              plan_type: pending.planId,
+              children_count: pending.children,
+              price: amount,
+              status: 'trial',
+              trial_start_date: new Date().toISOString(),
+              trial_end_date: trialEndDate.toISOString(),
+            })
+            .select<SubscriptionRecord>('id, trial_end_date')
+            .maybeSingle();
+
+          if (insertError) {
+            subscriptionLookupErrors.push(insertError);
+          } else if (insertedRecord) {
+            subscriptionRecord = insertedRecord;
+            subscriptionKey = 'user_id';
+          }
+        } catch (creationError) {
+          subscriptionLookupErrors.push(creationError);
         }
       }
 

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import {
+  isMissingColumnError,
+  shouldAttemptLegacySubscriptionLookup,
+  recordLegacySubscriptionLookupFailure,
+  recordLegacySubscriptionLookupSuccess,
+} from '../utils/subscriptionLegacy';
 import { Users, CheckCircle, ArrowRight, AlertCircle, LogOut, Baby, UserPlus, Plus, Edit } from 'lucide-react';
 import { Logo } from './Logo';
 import type { PlanId } from '../utils/payment';
@@ -204,13 +210,15 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (error) {
+      const shouldAttemptLegacyLookup = error ? shouldAttemptLegacySubscriptionLookup(error) : false;
+
+      if (error && !shouldAttemptLegacyLookup) {
         throw error;
       }
 
       let record: SubscriptionRecord | null = data;
 
-      if (!record) {
+      if (!record && shouldAttemptLegacyLookup) {
         const { data: legacyData, error: legacyError } = await supabase
           .from('subscriptions')
           .select('plan_type, children_count, price, status')
@@ -218,10 +226,16 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
           .maybeSingle();
 
         if (legacyError) {
-          throw legacyError;
+          recordLegacySubscriptionLookupFailure(legacyError);
+          if (!isMissingColumnError(legacyError)) {
+            throw legacyError;
+          }
+        } else {
+          record = legacyData;
+          if (record) {
+            recordLegacySubscriptionLookupSuccess();
+          }
         }
-
-        record = legacyData;
       }
 
       setSubscription(record);
