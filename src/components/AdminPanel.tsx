@@ -9,6 +9,11 @@ import { PromptsManager } from './PromptsManager';
 import { BulkGeneration } from './BulkGeneration';
 import { QuizEditor } from './QuizEditor';
 import { CustomStatusManager } from './CustomStatusManager';
+import {
+  ADMIN_SUBSCRIPTION_PLAN_OPTIONS,
+  createSubscriptionModalState,
+  type SubscriptionModalState,
+} from './admin/subscriptionModalState';
 
 type Subject = {
   id: string;
@@ -106,118 +111,6 @@ type SubscriptionRecord = {
   subscription_end_date: string | null;
   trial_end_date?: string | null;
 };
-
-type SubscriptionModalState = {
-  isOpen: boolean;
-  loading: boolean;
-  saving: boolean;
-  user: Profile | null;
-  planType: string;
-  activationEndDate: string;
-  status: string;
-  error: string | null;
-  success: string | null;
-};
-
-const ADMIN_PLAN_OPTIONS: { value: string; label: string }[] = [
-  { value: 'basic', label: 'Basique • 1 enfant' },
-  { value: 'duo', label: 'Duo • 2 enfants' },
-  { value: 'family', label: 'Famille • 3 enfants' },
-  { value: 'premium', label: 'Premium • 4 enfants' },
-  { value: 'liberte', label: 'Liberté • 5+ enfants' },
-];
-
-const INITIAL_SUBSCRIPTION_MODAL: SubscriptionModalState = {
-  isOpen: false,
-  loading: false,
-  saving: false,
-  user: null,
-  planType: 'basic',
-  activationEndDate: '',
-  status: 'inactive',
-  error: null,
-  success: null,
-};
-
-type SubscriptionRecord = {
-  plan_type: string;
-  status: string;
-  subscription_end_date: string | null;
-  trial_end_date?: string | null;
-};
-
-type SubscriptionModalState = {
-  isOpen: boolean;
-  loading: boolean;
-  saving: boolean;
-  user: Profile | null;
-  planType: string;
-  activationEndDate: string;
-  status: string;
-  error: string | null;
-  success: string | null;
-};
-
-const ADMIN_PLAN_OPTIONS: { value: string; label: string }[] = [
-  { value: 'basic', label: 'Basique • 1 enfant' },
-  { value: 'duo', label: 'Duo • 2 enfants' },
-  { value: 'family', label: 'Famille • 3 enfants' },
-  { value: 'premium', label: 'Premium • 4 enfants' },
-  { value: 'liberte', label: 'Liberté • 5+ enfants' },
-];
-
-const INITIAL_SUBSCRIPTION_MODAL: SubscriptionModalState = {
-  isOpen: false,
-  loading: false,
-  saving: false,
-  user: null,
-  planType: 'basic',
-  activationEndDate: '',
-  status: 'inactive',
-  error: null,
-  success: null,
-};
-
-type SubscriptionRecord = {
-  plan_type: string;
-  status: string;
-  subscription_end_date: string | null;
-  trial_end_date?: string | null;
-};
-
-type SubscriptionModalState = {
-  isOpen: boolean;
-  loading: boolean;
-  saving: boolean;
-  user: Profile | null;
-  planType: string;
-  activationEndDate: string;
-  status: string;
-  error: string | null;
-  success: string | null;
-};
-
-const SUBSCRIPTION_PLAN_OPTIONS: { value: string; label: string }[] = [
-  { value: 'basic', label: 'Basique • 1 enfant' },
-  { value: 'duo', label: 'Duo • 2 enfants' },
-  { value: 'family', label: 'Famille • 3 enfants' },
-  { value: 'premium', label: 'Premium • 4 enfants' },
-  { value: 'liberte', label: 'Liberté • 5+ enfants' },
-];
-
-function createInitialSubscriptionModal(): SubscriptionModalState {
-  return {
-    isOpen: false,
-    loading: false,
-    saving: false,
-    user: null,
-    planType: 'basic',
-    activationEndDate: '',
-    status: 'inactive',
-    error: null,
-    success: null,
-  };
-}
 
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
@@ -452,7 +345,9 @@ export function AdminPanel() {
     validUntil: '',
     active: true,
   });
-  const [subscriptionModal, setSubscriptionModal] = useState<SubscriptionModalState>(() => createInitialSubscriptionModal());
+  const [subscriptionModal, setSubscriptionModal] = useState<SubscriptionModalState<Profile>>(() =>
+    createSubscriptionModalState<Profile>()
+  );
 
   useEffect(() => {
     loadData();
@@ -1245,7 +1140,7 @@ export function AdminPanel() {
 
   async function openSubscriptionModal(user: Profile) {
     setSubscriptionModal({
-      ...createInitialSubscriptionModal(),
+      ...createSubscriptionModalState<Profile>(),
       isOpen: true,
       loading: true,
       user,
@@ -1284,7 +1179,7 @@ export function AdminPanel() {
   }
 
   function closeSubscriptionModal() {
-    setSubscriptionModal(createInitialSubscriptionModal());
+    setSubscriptionModal(createSubscriptionModalState<Profile>());
   }
 
   async function handleSaveSubscription() {
@@ -4007,7 +3902,7 @@ export function AdminPanel() {
                       onChange={(e) => setSubscriptionModal(prev => ({ ...prev, planType: e.target.value }))}
                       className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-blue-400 focus:outline-none"
                     >
-                      {SUBSCRIPTION_PLAN_OPTIONS.map(option => (
+                      {ADMIN_SUBSCRIPTION_PLAN_OPTIONS.map(option => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
