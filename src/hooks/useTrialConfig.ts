@@ -137,9 +137,11 @@ export function useTrialConfig() {
     ? trialConfig.name
     : `${formattedBaseTrial} d'essai gratuit`;
 
-  const promoBanner = trialConfig?.active
-    ? (trialConfig.description?.trim() || promoHeadline)
-    : `${formattedDefaultTrial} d'essai gratuit`;
+  const reassuranceCopy = `Profitez de ${formattedBaseTrial} d'essai gratuit, sans engagement.`;
+  const paymentReminder = "Vous ne serez facturé(e) qu'après la fin de votre période d'essai si vous continuez.";
+  const securityMessage = 'Paiements 100% sécurisés via Stripe et PayPal.';
+
+  const promoBanner = reassuranceCopy;
 
   const activeDescription = trialConfig?.active ? trialConfig.description : null;
 
@@ -154,5 +156,8 @@ export function useTrialConfig() {
     promoHeadline,
     promoBanner,
     activeDescription,
+    reassuranceCopy,
+    paymentReminder,
+    securityMessage,
   };
 }

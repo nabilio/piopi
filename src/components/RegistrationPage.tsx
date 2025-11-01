@@ -170,7 +170,14 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   });
   const [hasManuallyResetPlanSelection, setHasManuallyResetPlanSelection] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
+  const {
+    baseTrialDays,
+    formattedBaseTrial,
+    promoBanner,
+    reassuranceCopy,
+    paymentReminder,
+    securityMessage,
+  } = useTrialConfig();
 
   const selectedPlan = useMemo(
     () => (selectedPlanId ? PRICING_PLANS.find((plan) => plan.planId === selectedPlanId) ?? null : null),
@@ -196,10 +203,92 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
+  const firstChargeDateLabel = useMemo(() => firstChargeDate.toLocaleDateString('fr-FR'), [firstChargeDate]);
+  const dynamicPaymentReminder = `Aucun prélèvement aujourd'hui. Premier paiement le ${firstChargeDateLabel} si vous continuez après l'essai.`;
+  const cancellationMessage = 'Annulez à tout moment depuis vos paramètres parent.';
   const pricePerChild = selectedPlan && selectedChildren > 0 ? price / selectedChildren : 0;
   const isAuthenticated = Boolean(user);
-  const isGoogleSignIn = user?.app_metadata?.provider === 'google';
-  const shouldSkipDetails = isAuthenticated && isGoogleSignIn;
+  const shouldSkipDetails = isAuthenticated;
+
+  const registrationSteps = useMemo(
+    () =>
+      (isAuthenticated
+        ? [
+            {
+              id: 'plan' as const,
+              title: '1. Choisir votre plan',
+              description: 'Sélectionnez la formule adaptée à votre famille.',
+            },
+            {
+              id: 'payment' as const,
+              title: '2. Activer votre essai gratuit',
+              description: 'Validez votre essai gratuit avec un paiement sécurisé.',
+            },
+          ]
+        : [
+            {
+              id: 'plan' as const,
+              title: '1. Choisir votre plan',
+              description: 'Comparez nos offres et choisissez celle qui vous convient.',
+            },
+            {
+              id: 'details' as const,
+              title: '2. Créer votre compte',
+              description: 'Renseignez vos informations pour sécuriser votre accès parent.',
+            },
+            {
+              id: 'payment' as const,
+              title: '3. Activer votre essai gratuit',
+              description: 'Confirmez votre essai gratuit et votre moyen de paiement sécurisé.',
+            },
+          ]),
+    [isAuthenticated]
+  );
+
+  function renderStepIndicator(currentStep: 'plan' | 'details' | 'payment') {
+    if (registrationSteps.length === 0) {
+      return null;
+    }
+
+    const fallbackStepId = registrationSteps[registrationSteps.length - 1]?.id ?? 'payment';
+    const effectiveStep = registrationSteps.some((step) => step.id === currentStep) ? currentStep : fallbackStepId;
+    const activeIndex = registrationSteps.findIndex((step) => step.id === effectiveStep);
+    const safeActiveIndex = activeIndex === -1 ? registrationSteps.length - 1 : activeIndex;
+
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-stretch md:justify-between">
+          {registrationSteps.map((stepDefinition, index) => {
+            const isActive = index === safeActiveIndex;
+            const isCompleted = index < safeActiveIndex;
+            return (
+              <div key={stepDefinition.id} className="flex-1">
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold transition ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : isCompleted
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-500'
+                    }`}
+                  >
+                    {index + 1}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${isActive ? 'text-blue-600' : 'text-gray-700'}`}>
+                      {stepDefinition.title}
+                    </p>
+                    <p className="text-xs text-gray-500">{stepDefinition.description}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!user) {
@@ -747,6 +836,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-6xl mx-auto">
+          {renderStepIndicator('plan')}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -778,9 +868,32 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
               Commencez votre aventure d'apprentissage
             </h1>
-            <p className="text-xl text-gray-600">
-              {promoBanner}
-            </p>
+            <p className="text-xl text-gray-600">{reassuranceCopy}</p>
+            <p className="text-sm text-gray-500 mt-2">{paymentReminder}</p>
+            <p className="text-sm text-gray-500">{securityMessage}</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-blue-100">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="flex items-center gap-3 text-blue-700 font-semibold">
+                <ShieldCheck size={22} />
+                <span>{promoBanner}</span>
+              </div>
+              <ul className="text-sm text-gray-600 space-y-2">
+                <li className="flex items-start gap-2">
+                  <Check className="text-green-500 mt-0.5" size={16} />
+                  <span>{dynamicPaymentReminder}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="text-green-500 mt-0.5" size={16} />
+                  <span>{cancellationMessage}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <ShieldCheck className="text-blue-500 mt-0.5" size={16} />
+                  <span>{securityMessage}</span>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
@@ -874,7 +987,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                           : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                       }`}
                     >
-                      {shouldSkipDetails ? 'Choisir et passer au paiement' : 'Choisir ce plan'}
+                      {shouldSkipDetails ? 'Choisir et passer au paiement sécurisé' : 'Choisir ce plan'}
                     </button>
                   </div>
                 );
@@ -893,9 +1006,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                   0,00 €
                   <span className="text-2xl text-gray-600 font-normal ml-2">aujourd'hui</span>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}
-                </p>
+                <p className="text-sm text-gray-600">{dynamicPaymentReminder}</p>
+                <p className="text-sm text-gray-600">{cancellationMessage}</p>
+                <p className="text-sm text-gray-600">{securityMessage}</p>
                 {promoValidation?.valid && (
                   <p className="text-xs text-green-700 mt-1">
                     Code promo appliqué : votre essai total dure {formattedTotalTrial}.
@@ -1059,6 +1172,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
+          {renderStepIndicator('payment')}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1129,12 +1243,25 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             <div className="bg-gray-50 rounded-xl p-6 mb-6">
               <div className="flex items-start gap-4">
                 <CreditCard className="text-blue-500" size={28} />
-                <div className="text-sm text-gray-700 space-y-2">
-                  <p className="font-semibold">Paiement sécurisé par Stripe</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Montant prélevé : 0 € aujourd'hui (essai gratuit)</li>
-                    <li>Vous pourrez annuler votre essai à tout moment</li>
-                    <li>Premier prélèvement automatique le {firstChargeDate.toLocaleDateString('fr-FR')}</li>
+                <div className="text-sm text-gray-700 space-y-3">
+                  <p className="font-semibold">Paiements sécurisés (Stripe & PayPal)</p>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <Check className="text-green-500 mt-0.5" size={16} />
+                      <span>0 € prélevé aujourd'hui : votre essai gratuit démarre immédiatement.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="text-green-500 mt-0.5" size={16} />
+                      <span>{dynamicPaymentReminder}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="text-green-500 mt-0.5" size={16} />
+                      <span>{cancellationMessage}</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <ShieldCheck className="text-blue-500 mt-0.5" size={16} />
+                      <span>{securityMessage}</span>
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -1172,7 +1299,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             </button>
 
             <p className="text-xs text-gray-500 text-center mt-4">
-              En validant, vous acceptez nos conditions générales d'utilisation. Vous serez redirigé vers Stripe pour enregistrer votre moyen de paiement.
+              En validant, vous acceptez nos conditions générales d'utilisation. Votre moyen de paiement sera enregistré via Stripe ou PayPal.
             </p>
           </div>
         </div>
@@ -1183,6 +1310,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-md mx-auto">
+        {renderStepIndicator('details')}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -1227,8 +1355,10 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               <p className="text-gray-600">Sélectionnez un plan pour continuer votre inscription.</p>
             )}
             <p className="text-xs text-green-600 mt-1">
-              Essai gratuit de {summaryTrialLabel} • Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}
+              Essai gratuit de {summaryTrialLabel} • {dynamicPaymentReminder}
             </p>
+            <p className="text-xs text-gray-500">{cancellationMessage}</p>
+            <p className="text-xs text-gray-500">{securityMessage}</p>
           </div>
 
           {error && (
