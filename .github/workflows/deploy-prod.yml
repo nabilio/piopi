@@ -2,7 +2,7 @@ name: Deploy PROD to VPS
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -18,12 +18,11 @@ jobs:
           VPS_USER: ${{ vars.VPS_USER }}
         run: |
           set -euo pipefail
-          if [[ -z "${VPS_HOST}" ]]; then
+          if [[ -z "${VPS_HOST:-}" ]]; then
             echo "::error::La variable de dépôt VPS_HOST n'est pas configurée." >&2
             exit 1
           fi
-
-          if [[ -z "${VPS_USER}" ]]; then
+          if [[ -z "${VPS_USER:-}" ]]; then
             echo "::error::La variable de dépôt VPS_USER n'est pas configurée." >&2
             exit 1
           fi
@@ -43,18 +42,15 @@ jobs:
           HOST="$VPS_HOST"
           USER="$VPS_USER"
           PORT="${VPS_PORT:-22}"
-
           for attempt in {1..5}; do
             echo "Tentative de connexion SSH #${attempt} vers ${HOST}:${PORT}..."
             if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -p "$PORT" "$USER@$HOST" "exit 0"; then
               echo "Connexion SSH établie."
               exit 0
             fi
-
             echo "Connexion SSH échouée, nouvelle tentative dans 15 secondes..."
             sleep 15
           done
-
           echo "::error::Impossible de contacter ${HOST}:${PORT} après 5 tentatives." >&2
           exit 1
 
@@ -71,11 +67,12 @@ jobs:
 
           ssh -o StrictHostKeyChecking=accept-new -p "$PORT" "$USER@$HOST" 'bash -s' <<'EOF'
 set -euo pipefail
+
 APP_DIR=/home/adminio/htdocs/lapsi.online
 PROC_NAME=piopi-prod
 PORT=3001
 
-# initialiser nvm si disponible pour que node/npm soient dans le PATH
+# Initialiser nvm si disponible
 export NVM_DIR="$HOME/.nvm"
 if [ -s "$NVM_DIR/nvm.sh" ]; then
   . "$NVM_DIR/nvm.sh"
@@ -85,15 +82,8 @@ elif [ -s "/opt/nvm/nvm.sh" ]; then
   . "/opt/nvm/nvm.sh"
 fi
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "Node.js introuvable dans le PATH" >&2
-  exit 1
-fi
-
-if ! command -v npm >/dev/null 2>&1; then
-  echo "npm introuvable dans le PATH" >&2
-  exit 1
-fi
+command -v node >/dev/null || { echo "Node.js introuvable dans le PATH" >&2; exit 1; }
+command -v npm  >/dev/null || { echo "npm introuvable dans le PATH" >&2; exit 1; }
 
 node -v
 npm -v
@@ -105,6 +95,7 @@ git reset --hard origin/main
 npm ci
 npm run build
 
+# Démarrage/Reload app statique via serve + PM2
 if ! command -v pm2 >/dev/null 2>&1; then npm i -g pm2; fi
 if ! command -v serve >/dev/null 2>&1; then npm i -g serve; fi
 
@@ -112,6 +103,6 @@ pm2 delete "$PROC_NAME" || true
 pm2 start "serve -s ./dist -l $PORT" --name "$PROC_NAME"
 pm2 save
 
-# si sudo nginx -t demande un mot de passe, garde seulement le reload laissé à l'UI CloudPanel
+# Laisse le reload Nginx à CloudPanel si nécessaire
 # sudo nginx -t && sudo systemctl reload nginx
 EOF
