@@ -23,6 +23,10 @@ const PLANS: PlanConfig[] = [
   { id: 'liberte', name: 'Liberté', maxChildren: 999 },
 ];
 
+type ExtendedSubscriptionData = Stripe.Checkout.SessionCreateParams.SubscriptionData & {
+  payment_behavior?: Stripe.SubscriptionCreateParams.PaymentBehavior;
+};
+
 const BASE_PLAN_PRICES: Record<PlanId, number> = {
   basic: 2,
   duo: 3,
@@ -103,7 +107,52 @@ Deno.serve(async (req) => {
     const billedChildren = getBillingChildrenCount(plan, actualChildrenCount);
     const amount = computePlanPrice(plan, billedChildren);
 
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('app_settings')
+      .select(
+        'default_trial_days, trial_promo_active, trial_promo_days, trial_promo_starts_at, trial_promo_ends_at'
+      )
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('Failed to load trial configuration for checkout:', settingsError);
+    }
+
+    let configuredTrialDays = 30;
+    if (settingsData) {
+      const now = new Date();
+      const startsAt = settingsData.trial_promo_starts_at ? new Date(settingsData.trial_promo_starts_at) : null;
+      const endsAt = settingsData.trial_promo_ends_at ? new Date(settingsData.trial_promo_ends_at) : null;
+      const promoActive = Boolean(
+        settingsData.trial_promo_active &&
+        (!startsAt || startsAt <= now) &&
+        (!endsAt || endsAt >= now)
+      );
+
+      configuredTrialDays = promoActive
+        ? (settingsData.trial_promo_days ?? settingsData.default_trial_days ?? 30)
+        : (settingsData.default_trial_days ?? 30);
+    }
+
+    const trialPeriodDays = Math.max(0, Math.round(configuredTrialDays));
+
     const stripe = new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' });
+
+    const subscriptionMetadata = {
+      planId: plan.id,
+      billedChildren: billedChildren.toString(),
+    } satisfies Record<string, string>;
+
+    const subscriptionData: ExtendedSubscriptionData = {
+      metadata: subscriptionMetadata,
+      trial_period_days: trialPeriodDays > 0 ? trialPeriodDays : undefined,
+    };
+
+    if (trialPeriodDays > 0) {
+      subscriptionData.payment_behavior = 'default_incomplete';
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -111,16 +160,8 @@ Deno.serve(async (req) => {
       cancel_url: body.cancelUrl,
       client_reference_id: user.id,
       customer_email: user.email ?? undefined,
-      metadata: {
-        planId: plan.id,
-        billedChildren: billedChildren.toString(),
-      },
-      subscription_data: {
-        metadata: {
-          planId: plan.id,
-          billedChildren: billedChildren.toString(),
-        },
-      },
+      metadata: subscriptionMetadata,
+      subscription_data: subscriptionData,
       line_items: [
         {
           price_data: {
@@ -150,6 +191,7 @@ Deno.serve(async (req) => {
         sessionId: session.id,
         billedChildren,
         amount,
+        trialPeriodDays,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

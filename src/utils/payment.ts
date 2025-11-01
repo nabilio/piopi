@@ -14,6 +14,7 @@ type StripeCheckoutResponse = {
   sessionId: string;
   billedChildren: number;
   amount: number;
+  trialPeriodDays: number;
 };
 
 type StripeVerificationResponse = {
@@ -21,7 +22,10 @@ type StripeVerificationResponse = {
   paymentStatus: string | null;
   amountTotal: number | null;
   currency: string | null;
-  subscription: string | null;
+  subscriptionId: string | null;
+  subscriptionStatus: string | null;
+  subscriptionMetadata: Record<string, string> | null;
+  trialEndDate: string | null;
 };
 
 async function getAuthHeaders() {
