@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, BookOpen, Users, Trophy, Rocket, Star, Award, Zap, Heart, Target, Brain, Globe, TrendingUp, Check, Euro, Mail, Lock, X } from 'lucide-react';
+import { Sparkles, BookOpen, Users, Trophy, Rocket, Star, Award, Zap, Heart, Target, Brain, Globe, TrendingUp, Check, Euro, Mail, Lock, X, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
 import { useTrialConfig } from '../hooks/useTrialConfig';
@@ -26,7 +26,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
-  const { formattedBaseTrial, promoHeadline, promoBanner } = useTrialConfig();
+  const { formattedBaseTrial, promoHeadline, promoBanner, paymentReminder, securityMessage } = useTrialConfig();
   const heroTrialBadge = promoHeadline;
   const trialFeatureLabel = formattedBaseTrial ? `Essai gratuit: ${formattedBaseTrial}` : 'Essai gratuit offert';
   const scrollToPricing = () => {
@@ -282,6 +282,16 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
             <div className="text-center mb-12">
               <div className="inline-block bg-green-100 text-green-700 px-6 py-3 rounded-full font-black text-lg mb-6 border-2 border-green-300">
                 {promoBanner}
+              </div>
+              <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center text-sm text-gray-600">
+                <div className="flex items-center gap-2 justify-center">
+                  <Check className="text-green-500" size={16} />
+                  <span>{paymentReminder}</span>
+                </div>
+                <div className="flex items-center gap-2 justify-center">
+                  <ShieldCheck className="text-blue-500" size={16} />
+                  <span>{securityMessage}</span>
+                </div>
               </div>
               <h2 className="text-5xl font-black text-gray-800 mb-4">
                 Tarification simple et transparente
