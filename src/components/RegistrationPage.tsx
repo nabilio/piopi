@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, Home, LogOut } from 'lucide-react';
+import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
@@ -892,23 +892,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     setFinalizingPayment(false);
   }
 
-  function handleReturnHome() {
-    resetPaymentUiState();
-    if (step === 'payment') {
-      handleReturnToPlans();
-      return;
-    }
-    clearPendingRegistrationState();
-    onCancel();
-  }
-
-  function handleExitRegistration() {
-    resetPaymentUiState();
-    clearPendingRegistrationState();
-    setStep('plan');
-    onCancel();
-  }
-
   async function handleSignOutAndExit() {
     if (signingOut) {
       return;
@@ -933,22 +916,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleReturnHome}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
-              >
-                <Home size={20} />
-                Retour à l'accueil
-              </button>
-              <button
-                onClick={handleExitRegistration}
-                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
-              >
-                Annuler l'inscription
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-3 mb-8">
             {user && (
               <button
                 onClick={handleSignOutAndExit}
@@ -1205,12 +1173,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 <X size={20} />
                 Retourner au choix des plans
               </button>
-              <button
-                onClick={handleExitRegistration}
-                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
-              >
-                Annuler l'inscription
-              </button>
             </div>
             {user && (
               <button
@@ -1306,22 +1268,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-md mx-auto">
         {renderStepIndicator('details')}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleReturnHome}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
-            >
-              <Home size={20} />
-              Retour à l'accueil
-            </button>
-            <button
-              onClick={handleExitRegistration}
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 underline-offset-2 hover:underline"
-            >
-              Annuler l'inscription
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-3 mb-6">
           {user && (
             <button
               onClick={handleSignOutAndExit}
