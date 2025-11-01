@@ -96,6 +96,13 @@ type Profile = {
   last_sign_in_at?: string;
   email_confirmed?: boolean;
   email_confirmed_at?: string | null;
+  subscription_status?: string | null;
+  subscription_plan_type?: string | null;
+  subscription_trial_end_date?: string | null;
+  subscription_start_date?: string | null;
+  subscription_end_date?: string | null;
+  last_payment_status?: string | null;
+  last_payment_date?: string | null;
 };
 
 type SubscriptionRecord = {
@@ -106,6 +113,140 @@ type SubscriptionRecord = {
 };
 
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
+
+type StatusBadgeInfo = {
+  label: string;
+  className: string;
+  title?: string;
+};
+
+const PLAN_LABELS: Record<string, string> = {
+  'basic': 'Basique',
+  'duo': 'Duo',
+  'family': 'Famille',
+  'premium': 'Premium',
+  'liberte': 'Liberté',
+  'monthly': 'Mensuel',
+  'yearly': 'Annuel'
+};
+
+const getPlanDisplayName = (planType?: string | null): string | null => {
+  if (!planType) {
+    return null;
+  }
+  return PLAN_LABELS[planType] || planType;
+};
+
+const formatDate = (value?: string | null): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    return new Date(value).toLocaleDateString('fr-FR');
+  } catch {
+    return undefined;
+  }
+};
+
+const getPlanBadgeInfo = (user: Profile): StatusBadgeInfo => {
+  const planName = getPlanDisplayName(user.subscription_plan_type);
+  return {
+    label: planName ? `Plan: ${planName}` : 'Plan: Aucun',
+    className: planName ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700',
+  };
+};
+
+const getSubscriptionStatusInfo = (user: Profile): StatusBadgeInfo => {
+  if (!user.subscription_status) {
+    return {
+      label: 'Statut: Aucun',
+      className: 'bg-gray-200 text-gray-700',
+    };
+  }
+
+  const now = Date.now();
+
+  if (user.subscription_status === 'trial') {
+    const trialEnd = user.subscription_trial_end_date ? Date.parse(user.subscription_trial_end_date) : null;
+    const isActive = trialEnd ? trialEnd >= now : false;
+    return {
+      label: isActive ? 'Essai actif' : 'Essai expiré',
+      className: isActive ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700',
+      title: trialEnd ? `Fin d'essai: ${formatDate(user.subscription_trial_end_date)}` : undefined,
+    };
+  }
+
+  if (user.subscription_status === 'active') {
+    const subscriptionEnd = user.subscription_end_date ? Date.parse(user.subscription_end_date) : null;
+    const isActive = subscriptionEnd ? subscriptionEnd >= now : true;
+    return {
+      label: isActive ? 'Abonnement actif' : 'Abonnement expiré',
+      className: isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700',
+      title: subscriptionEnd ? `Renouvellement: ${formatDate(user.subscription_end_date)}` : undefined,
+    };
+  }
+
+  if (user.subscription_status === 'cancelled') {
+    return {
+      label: 'Abonnement annulé',
+      className: 'bg-gray-100 text-gray-600',
+    };
+  }
+
+  if (user.subscription_status === 'expired') {
+    return {
+      label: 'Abonnement expiré',
+      className: 'bg-red-100 text-red-700',
+    };
+  }
+
+  return {
+    label: user.subscription_status,
+    className: 'bg-gray-100 text-gray-700',
+  };
+};
+
+const getPaymentStatusInfo = (user: Profile): StatusBadgeInfo => {
+  if (!user.last_payment_status) {
+    return {
+      label: 'Paiement: Aucun',
+      className: 'bg-gray-200 text-gray-700',
+    };
+  }
+
+  const formattedDate = formatDate(user.last_payment_date);
+  const baseInfo: StatusBadgeInfo = {
+    label: 'Paiement',
+    className: 'bg-gray-200 text-gray-700',
+    title: formattedDate ? `Dernier paiement: ${formattedDate}` : undefined,
+  };
+
+  switch (user.last_payment_status) {
+    case 'completed':
+      return {
+        ...baseInfo,
+        label: 'Paiement complété',
+        className: 'bg-green-100 text-green-700',
+      };
+    case 'pending':
+      return {
+        ...baseInfo,
+        label: 'Paiement en attente',
+        className: 'bg-yellow-100 text-yellow-700',
+      };
+    case 'failed':
+      return {
+        ...baseInfo,
+        label: 'Paiement échoué',
+        className: 'bg-red-100 text-red-700',
+      };
+    default:
+      return {
+        ...baseInfo,
+        label: `Paiement: ${user.last_payment_status}`,
+      };
+  }
+};
 
 type AdminView = 'dashboard' | 'levels' | 'quiz' | 'lessons' | 'users' | 'activities' | 'ai-generator' | 'settings' | 'subjects-manager' | 'lessons-manager' | 'quiz-manager' | 'coach-test' | 'prompts' | 'student-simulator' | 'custom-statuses' | 'promotions';
 
@@ -3531,8 +3672,12 @@ export function AdminPanel() {
               </label>
             </div>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className={`p-4 rounded-xl ${
+              {filteredUsers.map((user) => {
+                const planInfo = getPlanBadgeInfo(user);
+                const subscriptionInfo = getSubscriptionStatusInfo(user);
+                const paymentInfo = getPaymentStatusInfo(user);
+                return (
+                  <div key={user.id} className={`p-4 rounded-xl ${
                   !user.has_profile ? 'bg-yellow-50 border-2 border-yellow-300' :
                   user.banned ? 'bg-red-50 border-2 border-red-200' : 'bg-gray-50'
                 }`}>
@@ -3563,21 +3708,6 @@ export function AdminPanel() {
                               <option value="admin">admin</option>
                             </select>
                           )}
-                          {user.email_confirmed ? (
-                            <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                              Email confirmé
-                            </span>
-                          ) : (
-                            <span className="text-xs px-2 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                              En attente
-                            </span>
-                          )}
                           {user.grade_level && (
                             <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold">
                               {user.grade_level}
@@ -3588,6 +3718,23 @@ export function AdminPanel() {
                               BANNI
                             </span>
                           )}
+                        </div>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${planInfo.className}`}>
+                            {planInfo.label}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-semibold ${subscriptionInfo.className}`}
+                            title={subscriptionInfo.title}
+                          >
+                            {subscriptionInfo.label}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full font-semibold ${paymentInfo.className}`}
+                            title={paymentInfo.title}
+                          >
+                            {paymentInfo.label}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -3621,8 +3768,9 @@ export function AdminPanel() {
                       </button>
                     </div>
                   </div>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
