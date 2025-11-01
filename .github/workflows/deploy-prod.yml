@@ -66,43 +66,43 @@ jobs:
           PORT="${VPS_PORT:-22}"
 
           ssh -o StrictHostKeyChecking=accept-new -p "$PORT" "$USER@$HOST" 'bash -s' <<'EOF'
-set -euo pipefail
+          set -euo pipefail
 
-APP_DIR=/home/adminio/htdocs/lapsi.online
-PROC_NAME=piopi-prod
-PORT=3001
+          APP_DIR=/home/adminio/htdocs/lapsi.online
+          PROC_NAME=piopi-prod
+          PORT=3001
 
-# Initialiser nvm si disponible
-export NVM_DIR="$HOME/.nvm"
-if [ -s "$NVM_DIR/nvm.sh" ]; then
-  . "$NVM_DIR/nvm.sh"
-elif [ -s "/usr/local/nvm/nvm.sh" ]; then
-  . "/usr/local/nvm/nvm.sh"
-elif [ -s "/opt/nvm/nvm.sh" ]; then
-  . "/opt/nvm/nvm.sh"
-fi
+          # Initialiser nvm si disponible
+          export NVM_DIR="$HOME/.nvm"
+          if [ -s "$NVM_DIR/nvm.sh" ]; then
+            . "$NVM_DIR/nvm.sh"
+          elif [ -s "/usr/local/nvm/nvm.sh" ]; then
+            . "/usr/local/nvm/nvm.sh"
+          elif [ -s "/opt/nvm/nvm.sh" ]; then
+            . "/opt/nvm/nvm.sh"
+          fi
 
-command -v node >/dev/null || { echo "Node.js introuvable dans le PATH" >&2; exit 1; }
-command -v npm  >/dev/null || { echo "npm introuvable dans le PATH" >&2; exit 1; }
+          command -v node >/dev/null || { echo "Node.js introuvable dans le PATH" >&2; exit 1; }
+          command -v npm  >/dev/null || { echo "npm introuvable dans le PATH" >&2; exit 1; }
 
-node -v
-npm -v
+          node -v
+          npm -v
 
-cd "$APP_DIR"
-git fetch origin main
-git reset --hard origin/main
+          cd "$APP_DIR"
+          git fetch origin main
+          git reset --hard origin/main
 
-npm ci
-npm run build
+          npm ci
+          npm run build
 
-# Démarrage/Reload app statique via serve + PM2
-if ! command -v pm2 >/dev/null 2>&1; then npm i -g pm2; fi
-if ! command -v serve >/dev/null 2>&1; then npm i -g serve; fi
+          # Démarrage/Reload app statique via serve + PM2
+          if ! command -v pm2 >/dev/null 2>&1; then npm i -g pm2; fi
+          if ! command -v serve >/dev/null 2>&1; then npm i -g serve; fi
 
-pm2 delete "$PROC_NAME" || true
-pm2 start "serve -s ./dist -l $PORT" --name "$PROC_NAME"
-pm2 save
+          pm2 delete "$PROC_NAME" || true
+          pm2 start "serve -s ./dist -l $PORT" --name "$PROC_NAME"
+          pm2 save
 
-# Laisse le reload Nginx à CloudPanel si nécessaire
-# sudo nginx -t && sudo systemctl reload nginx
-EOF
+          # Laisse le reload Nginx à CloudPanel si nécessaire
+          # sudo nginx -t && sudo systemctl reload nginx
+          EOF
