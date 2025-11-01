@@ -356,6 +356,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     }
   }
 
+  function handleBackToPlanSelection() {
+    setHasManuallyResetPlanSelection(true);
+    setStep('plan');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -1265,7 +1270,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           </div>
 
           <button
-            onClick={() => setStep('plan')}
+            onClick={handleBackToPlanSelection}
             className="w-full mt-4 py-3 text-gray-600 hover:text-gray-800 font-semibold transition"
           >
             Retour au choix de l'abonnement
