@@ -3,6 +3,7 @@ import { Check, Crown, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
+import { useTrialConfig } from '../hooks/useTrialConfig';
 import {
   createStripeCheckout,
   verifyStripeCheckout,
@@ -161,6 +162,7 @@ type UpgradePlansPageProps = {
 export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: UpgradePlansPageProps) {
   const { user, profile } = useAuth();
   const { showToast } = useToast();
+  const { formattedBaseTrial, paymentReminder } = useTrialConfig();
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -181,6 +183,8 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
   const selectedPlanPrice = selectedPlan && billedSelectedChildren !== null
     ? computePlanPrice(selectedPlan, billedSelectedChildren)
     : null;
+  const isTrialingSubscription = subscription?.status === 'trial';
+  const trialEndDate = subscription?.trial_end_date ? new Date(subscription.trial_end_date) : null;
 
   const isReactivation = useMemo(() => {
     if (!selectedPlan || !subscription) return false;
@@ -261,8 +265,26 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
 
       if (paymentMethod === 'stripe' && options?.sessionId) {
         const verification = await verifyStripeCheckout(options.sessionId);
-        if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+        const allowedStatuses = ['paid', 'no_payment_required'];
+        if (
+          verification.status !== 'complete' ||
+          !verification.paymentStatus ||
+          !allowedStatuses.includes(verification.paymentStatus)
+        ) {
           throw new Error('Le paiement Stripe n\'est pas confirmé');
+        }
+
+        if (verification.subscriptionMetadata) {
+          const { planId, billedChildren: billedChildrenMetadata } = verification.subscriptionMetadata;
+          if (planId && planId !== plan.id) {
+            console.warn('Incohérence plan Stripe détectée:', planId, plan.id);
+          }
+          if (billedChildrenMetadata) {
+            const expectedBilledChildren = String(options?.billedChildren ?? getBillingChildrenCount(plan, actualChildrenCount));
+            if (billedChildrenMetadata !== expectedBilledChildren) {
+              console.warn('Incohérence enfants facturés Stripe détectée:', billedChildrenMetadata, expectedBilledChildren);
+            }
+          }
         }
       }
 
@@ -555,17 +577,41 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
               </div>
 
               <div className="text-center text-sm text-gray-600">
-                <p>Le changement sera effectif immédiatement.</p>
-                <p className="mt-1">Votre prochain paiement sera de <strong>{nextPlanPrice}€</strong>.</p>
+                {isTrialingSubscription ? (
+                  <>
+                    <p>
+                      Aujourd'hui : <strong>0€</strong> grâce à votre période d'essai{formattedBaseTrial ? ` de ${formattedBaseTrial}` : ''}.
+                    </p>
+                    <p className="mt-1">
+                      Votre abonnement passera à <strong>{nextPlanPrice}€/mois</strong>
+                      {trialEndDate
+                        ? ` le ${trialEndDate.toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })}`
+                        : ' à la fin de votre essai.'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>Le changement sera effectif immédiatement.</p>
+                    <p className="mt-1">Votre prochain paiement sera de <strong>{nextPlanPrice}€</strong>.</p>
+                  </>
+                )}
               </div>
             </div>
 
             {requiresPayment ? (
               <div className="space-y-4">
                 <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl text-purple-800 text-sm">
-                  <p className="font-semibold mb-1">Paiement requis</p>
+                  <p className="font-semibold mb-1">
+                    {isTrialingSubscription ? 'Valider votre essai gratuit' : 'Paiement requis'}
+                  </p>
                   <p>
-                    Finalisez votre mise à jour avec notre paiement sécurisé par carte bancaire (Stripe).
+                    {isTrialingSubscription
+                      ? "Vous serez redirigé(e) vers Stripe pour confirmer votre essai gratuit. Aucun montant ne sera débité aujourd'hui."
+                      : 'Finalisez votre mise à jour avec notre paiement sécurisé par carte bancaire (Stripe).'}
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-4">
@@ -634,6 +680,14 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
             <br />
             Sélectionnez un plan adapté à vos besoins.
           </p>
+          {isTrialingSubscription && (
+            <div className="mt-6 text-base text-gray-700">
+              <p className="font-semibold">Aujourd'hui : 0€ — votre essai continue.</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {paymentReminder}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-8">
