@@ -24,7 +24,6 @@ import { NetworkPanel } from './components/NetworkPanel';
 import { Settings } from './components/Settings';
 import { UserExplorer } from './components/UserExplorer';
 import { LandingPage } from './components/LandingPage';
-import { SimpleRegistration } from './components/SimpleRegistration';
 import { ParentHome } from './components/ParentHome';
 import { ParentActivityFeed } from './components/ParentActivityFeed';
 import { ParentNotifications } from './components/ParentNotifications';
@@ -53,9 +52,11 @@ import { TestQuizQuery } from './components/TestQuizQuery';
 import { StoriesLibrary } from './components/StoriesLibrary';
 import { useGamification } from './hooks/useGamification';
 import { Subject, Activity } from './lib/supabase';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
+import type { PlanId } from './utils/payment';
+import { RegistrationPage, PENDING_REGISTRATION_STORAGE_KEY } from './components/RegistrationPage';
 
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
@@ -123,6 +124,7 @@ function AppContent() {
   const [activitiesCount, setActivitiesCount] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
+  const [registrationPlanId, setRegistrationPlanId] = useState<PlanId | null>(null);
   const [showAvatarCustomizer, setShowAvatarCustomizer] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isQuizActive, setIsQuizActive] = useState(false);
@@ -137,6 +139,9 @@ function AppContent() {
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
   const [childBirthdaysChildId, setChildBirthdaysChildId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'security' | 'notifications' | 'subscription' | 'children'>('profile');
+  const [processedGoogleRegistration, setProcessedGoogleRegistration] = useState(false);
+  const [requiresPaymentSetup, setRequiresPaymentSetup] = useState(false);
+  const [checkingPaymentRequirement, setCheckingPaymentRequirement] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -177,32 +182,158 @@ function AppContent() {
     }
   }, [user, profile]);
 
-  // Vérifier si on est sur la page de confirmation d'email
-  if (window.location.pathname === '/confirm-email') {
-    return <EmailConfirmedPage />;
-  }
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
 
-  // Vérifier si on est sur la page de réinitialisation de mot de passe
-  if (window.location.pathname === '/reset-password') {
-    return <ResetPasswordPage />;
-  }
+    const params = new URLSearchParams(window.location.search);
+    const hasRegistrationPaymentParam = params.has('registration_payment');
 
-  // DEBUG: Show test query page
-  if (window.location.search.includes('test-quiz-query')) {
-    return <TestQuizQuery />;
-  }
+    let hasStoredPendingRegistration = false;
+    const storedPendingRegistration = localStorage.getItem(PENDING_REGISTRATION_STORAGE_KEY);
+    const validPlanIds: PlanId[] = ['basic', 'duo', 'family', 'premium', 'liberte'];
 
-  if (window.location.pathname === '/child-qr-login') {
-    return <ChildQRLoginPage />;
-  }
+    if (storedPendingRegistration) {
+      try {
+        const parsed = JSON.parse(storedPendingRegistration) as { planId?: PlanId | null } | null;
+        if (parsed?.planId && validPlanIds.includes(parsed.planId as PlanId)) {
+          setRegistrationPlanId(parsed.planId as PlanId);
+        }
+        hasStoredPendingRegistration = true;
+      } catch (error) {
+        console.error('Failed to parse pending registration storage value:', error);
+        localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+      }
+    }
+
+    if (hasRegistrationPaymentParam || hasStoredPendingRegistration) {
+      setShowRegistration(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) {
-      setView('home');
-      setSelectedSubject(null);
-      setSelectedActivity(null);
-      setShowAvatarCustomizer(false);
-      setShowOnboarding(false);
+      setProcessedGoogleRegistration(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    async function handlePendingGoogleRegistration() {
+      if (!user || !profile || processedGoogleRegistration) {
+        return;
+      }
+
+      const pendingGoogle = localStorage.getItem('pendingGoogleRegistration');
+      if (pendingGoogle !== 'true') {
+        return;
+      }
+
+      setProcessedGoogleRegistration(true);
+
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error checking subscription for Google registration:', error);
+        }
+
+        if (!error && !data) {
+          setRegistrationPlanId(null);
+          setShowRegistration(true);
+        }
+      } catch (error) {
+        console.error('Failed to process pending Google registration:', error);
+        setRegistrationPlanId(null);
+        setShowRegistration(true);
+      } finally {
+        localStorage.removeItem('pendingGoogleRegistration');
+      }
+    }
+
+    handlePendingGoogleRegistration();
+  }, [user, profile, processedGoogleRegistration]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function evaluatePaymentRequirement() {
+      if (!user || !profile || profile.role !== 'parent' || !isSupabaseConfigured) {
+        if (isActive) {
+          setRequiresPaymentSetup(false);
+          setCheckingPaymentRequirement(false);
+        }
+        return;
+      }
+
+      if (isActive) {
+        setCheckingPaymentRequirement(true);
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('status, subscription_start_date')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        let subscriptionRecord = data;
+
+        if (error) {
+          throw error;
+        }
+
+        if (!subscriptionRecord) {
+          const { data: legacyRecord, error: legacyError } = await supabase
+            .from('subscriptions')
+            .select('status, subscription_start_date')
+            .eq('parent_id', user.id)
+            .maybeSingle();
+
+          if (legacyError) {
+            throw legacyError;
+          }
+
+          subscriptionRecord = legacyRecord ?? null;
+        }
+
+        const hasValidatedPayment = Boolean(subscriptionRecord?.subscription_start_date) || subscriptionRecord?.status === 'active';
+
+        if (isActive) {
+          setRequiresPaymentSetup(!hasValidatedPayment);
+        }
+      } catch (subscriptionError) {
+        console.error('Failed to verify subscription status after registration:', subscriptionError);
+        if (isActive) {
+          setRequiresPaymentSetup(true);
+        }
+      } finally {
+        if (isActive) {
+          setCheckingPaymentRequirement(false);
+        }
+      }
+    }
+
+    evaluatePaymentRequirement();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user, profile, subscriptionRefreshTrigger]);
+
+  useEffect(() => {
+      if (!user) {
+        setView('home');
+        setSelectedSubject(null);
+        setSelectedActivity(null);
+        setShowAvatarCustomizer(false);
+        setShowOnboarding(false);
+        setShowRegistration(false);
+        setRegistrationPlanId(null);
     } else if (profile?.role === 'admin' && profile?.onboarding_completed) {
       if (view === 'home') {
         setView('admin');
@@ -214,7 +345,36 @@ function AppContent() {
     } else if ((profile?.role === 'child' || isViewingAsChild) && (view === 'parent-dashboard' || view === 'parent-home')) {
       setView('home');
     }
-  }, [user, profile, isViewingAsChild]);
+  }, [user, profile, isViewingAsChild, view]);
+
+  const pathname = window.location.pathname;
+  const searchParams = window.location.search;
+  const isConfirmEmailRoute = pathname === '/confirm-email';
+  const isResetPasswordRoute = pathname === '/reset-password';
+  const isTestQuizQueryRoute = searchParams.includes('test-quiz-query');
+  const isChildQrLoginRoute = pathname === '/child-qr-login';
+  const shouldForceRegistration = Boolean(user && profile?.role === 'parent' && requiresPaymentSetup);
+  const shouldShowRegistration = showRegistration || shouldForceRegistration;
+  const isParentUser = Boolean(user && profile?.role === 'parent');
+
+  // Vérifier si on est sur la page de confirmation d'email
+  if (isConfirmEmailRoute) {
+    return <EmailConfirmedPage />;
+  }
+
+  // Vérifier si on est sur la page de réinitialisation de mot de passe
+  if (isResetPasswordRoute) {
+    return <ResetPasswordPage />;
+  }
+
+  // DEBUG: Show test query page
+  if (isTestQuizQueryRoute) {
+    return <TestQuizQuery />;
+  }
+
+  if (isChildQrLoginRoute) {
+    return <ChildQRLoginPage />;
+  }
 
   if (loading) {
     return (
@@ -224,6 +384,34 @@ function AppContent() {
           <p className="text-xl text-gray-600">Chargement...</p>
         </div>
       </div>
+    );
+  }
+
+  if (isParentUser && checkingPaymentRequirement && !showRegistration) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mb-4"></div>
+          <p className="text-xl text-gray-600">Vérification de votre abonnement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (shouldShowRegistration) {
+    return (
+      <RegistrationPage
+        initialPlanId={registrationPlanId}
+        onSuccess={() => {
+          setShowRegistration(false);
+          setRegistrationPlanId(null);
+          setSubscriptionRefreshTrigger((prev) => prev + 1);
+        }}
+        onCancel={() => {
+          setShowRegistration(false);
+          setRegistrationPlanId(null);
+        }}
+      />
     );
   }
 
@@ -241,25 +429,13 @@ function AppContent() {
       return <LegalNoticePage onBack={() => setView('home')} />;
     }
 
-    if (showRegistration) {
-      return (
-        <SimpleRegistration
-          onSuccess={() => {
-            refreshProfile();
-          }}
-          onBackToLogin={() => setShowRegistration(false)}
-          onContactClick={() => setView('contact')}
-          onTermsClick={() => setView('terms')}
-          onPrivacyClick={() => setView('privacy')}
-          onLegalClick={() => setView('legal')}
-        />
-      );
-    }
-
     return (
       <>
         <LandingPage
-          onRegisterClick={() => setShowRegistration(true)}
+          onPlanSelect={(planId) => {
+            setRegistrationPlanId(planId);
+            setShowRegistration(true);
+          }}
           onContactClick={() => setView('contact')}
           onTermsClick={() => setView('terms')}
           onPrivacyClick={() => setView('privacy')}

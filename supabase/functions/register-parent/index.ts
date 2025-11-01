@@ -21,9 +21,9 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { email, password, fullName, selectedChildren, billingPeriod, price, promoCode, promoMonths } = await req.json();
+    const { email, password, fullName, selectedChildren, billingPeriod, price, promoCode, promoMonths, planId } = await req.json();
 
-    if (!email || !password || !fullName) {
+    if (!email || !password || !fullName || !planId) {
       throw new Error('Missing required fields');
     }
 
@@ -37,13 +37,10 @@ Deno.serve(async (req: Request) => {
       throw new Error('Un compte avec cet email existe déjà. Veuillez vous connecter.');
     }
 
-    let authData;
-    let authError;
-
     const createUserResult = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: false,
+      email_confirm: true,
       user_metadata: {
         full_name: fullName,
         selected_children_count: selectedChildren,
@@ -52,13 +49,12 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    authData = createUserResult.data;
-    authError = createUserResult.error;
-
+    let authData = createUserResult.data;
+    const authError = createUserResult.error;
     if (authError) {
       if (authError.message.includes('already registered')) {
         const { data: { user }, error: getUserError } = await supabase.auth.admin.getUserByEmail(email);
-        
+
         if (getUserError || !user) {
           throw new Error('Erreur lors de la récupération de l\'utilisateur existant');
         }
@@ -73,7 +69,23 @@ Deno.serve(async (req: Request) => {
           throw new Error('Un compte avec cet email existe déjà. Veuillez vous connecter.');
         }
 
-        authData = { user };
+        const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+          password,
+          email_confirm: true,
+          user_metadata: {
+            ...(user.user_metadata ?? {}),
+            full_name: fullName,
+            selected_children_count: selectedChildren,
+            billing_period: billingPeriod,
+            promo_code: promoCode || null,
+          },
+        });
+
+        if (updateError || !updatedUser.user) {
+          throw new Error('Erreur lors de la mise à jour du compte existant');
+        }
+
+        authData = updatedUser;
       } else {
         throw new Error('Failed to create user: ' + authError.message);
       }
@@ -81,6 +93,24 @@ Deno.serve(async (req: Request) => {
 
     if (!authData || !authData.user) {
       throw new Error('Failed to create user');
+    }
+
+    // Ensure the new account is marked as confirmed even when creation succeeds on the first attempt
+    const { error: confirmError, data: confirmedUser } = await supabase.auth.admin.updateUserById(authData.user.id, {
+      email_confirm: true,
+      user_metadata: {
+        ...(authData.user.user_metadata ?? {}),
+        full_name: fullName,
+        selected_children_count: selectedChildren,
+        billing_period: billingPeriod,
+        promo_code: promoCode || null,
+      },
+    });
+
+    if (confirmError) {
+      console.error('Failed to confirm user email:', confirmError);
+    } else if (confirmedUser?.user) {
+      authData = confirmedUser;
     }
 
     const { data: settingsData, error: settingsError } = await supabase
@@ -134,8 +164,8 @@ Deno.serve(async (req: Request) => {
     const { error: subscriptionError } = await supabase
       .from('subscriptions')
       .insert({
-        parent_id: authData.user.id,
-        plan_type: billingPeriod,
+        user_id: authData.user.id,
+        plan_type: planId,
         children_count: selectedChildren,
         price,
         status: 'trial',
@@ -153,54 +183,11 @@ Deno.serve(async (req: Request) => {
       await supabase.rpc('increment_promo_usage', { promo_code_input: promoCode });
     }
 
-    const { data: { properties }, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'signup',
-      email: email,
-      options: {
-        redirectTo: 'https://www.piopi.eu',
-      },
-    });
-
-    if (linkError || !properties) {
-      console.error('Failed to generate confirmation link:', linkError);
-    } else {
-      const confirmationLink = properties.action_link;
-
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-      try {
-        const emailResponse = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({
-            to: email,
-            subject: 'Confirmez votre email - PioPi',
-            template: 'email_confirmation',
-            data: {
-              parentName: fullName,
-              confirmationLink: confirmationLink,
-            },
-          }),
-        });
-
-        if (!emailResponse.ok) {
-          const emailError = await emailResponse.json();
-          console.error('Failed to send confirmation email:', emailError);
-        }
-      } catch (emailError) {
-        console.error('Error sending confirmation email:', emailError);
-      }
-    }
-
     return new Response(
       JSON.stringify({
         success: true,
         userId: authData.user.id,
-        needsEmailConfirmation: true,
+        needsEmailConfirmation: false,
       }),
       {
         headers: {
@@ -210,11 +197,11 @@ Deno.serve(async (req: Request) => {
       }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Internal server error'
+        error: error instanceof Error ? error.message : 'Internal server error'
       }),
       {
         status: 400,

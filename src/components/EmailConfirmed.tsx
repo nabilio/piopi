@@ -1,9 +1,7 @@
 import { CheckCircle, Sparkles, BookOpen, Brain, Gift } from 'lucide-react';
 import { Logo } from './Logo';
-import { useTrialConfig } from '../hooks/useTrialConfig';
 
 export function EmailConfirmed() {
-  const { formattedBaseTrial } = useTrialConfig();
   const handleContinue = () => {
     window.location.href = '/';
   };
@@ -35,11 +33,11 @@ export function EmailConfirmed() {
             <div className="flex items-center justify-center gap-2 mb-3">
               <Gift className="text-blue-600" size={28} />
               <h3 className="text-xl font-bold text-gray-800">
-                Essai gratuit de {formattedBaseTrial}
+                Essai gratuit de 30 jours
               </h3>
             </div>
             <p className="text-gray-700 mb-4">
-              Profitez de toutes les fonctionnalités premium dès maintenant. Votre moyen de paiement sera débité automatiquement après l'essai si vous ne résiliez pas.
+              Profitez de toutes les fonctionnalités premium sans carte bancaire
             </p>
             <div className="space-y-2 text-left max-w-md mx-auto">
               <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -74,8 +72,8 @@ export function EmailConfirmed() {
                   2
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-800">Ajoutez votre mode de paiement</p>
-                  <p className="text-sm text-gray-600">Validez l'essai gratuit sécurisé</p>
+                  <p className="font-semibold text-gray-800">Ajoutez vos enfants</p>
+                  <p className="text-sm text-gray-600">Créez leurs profils personnalisés</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -83,8 +81,8 @@ export function EmailConfirmed() {
                   3
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-800">Ajoutez vos enfants</p>
-                  <p className="text-sm text-gray-600">Créez leurs profils personnalisés</p>
+                  <p className="font-semibold text-gray-800">Commencez l'aventure</p>
+                  <p className="text-sm text-gray-600">Découvrez les leçons, quiz et défis</p>
                 </div>
               </div>
             </div>

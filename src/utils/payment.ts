@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
+export type PlanId = 'basic' | 'duo' | 'family' | 'premium' | 'liberte';
 
 type CreatePaymentOptions = {
   planId: PlanId;
