@@ -418,6 +418,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       const subscriptionStartDate = new Date();
       const normalizedStatus = verification.paymentStatus === 'paid' ? 'active' : 'trial';
 
+      const isMissingColumnError = (candidate: unknown) =>
+        typeof candidate === 'object' && candidate !== null && 'code' in candidate && (candidate as { code?: string }).code === '42703';
+
       type SubscriptionRecord = { id: string; trial_end_date: string | null };
       let subscriptionRecord: SubscriptionRecord | null = null;
       let subscriptionKey: 'user_id' | 'parent_id' = 'user_id';

@@ -64,6 +64,9 @@ import {
   recordLegacySubscriptionLookupSuccess,
 } from './utils/subscriptionLegacy';
 
+const isMissingColumnError = (candidate: unknown): candidate is { code?: string } =>
+  typeof candidate === 'object' && candidate !== null && 'code' in candidate && (candidate as { code?: string }).code === '42703';
+
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
 function UpgradePlanView({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
