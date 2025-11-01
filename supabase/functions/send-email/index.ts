@@ -62,7 +62,7 @@ function getEmailTemplate(template: string, data: Record<string, any>): string {
       </div>
 
       <div class="highlight">
-        <p><strong>🎁 Votre essai gratuit de 30 jours vous attend !</strong></p>
+        <p><strong>🎁 Votre essai gratuit de 7 jours vous attend !</strong></p>
         <p>Une fois votre email confirmé, vous pourrez :</p>
         <ul>
           <li>✅ Ajouter le profil de vos enfants</li>
@@ -126,7 +126,7 @@ function getEmailTemplate(template: string, data: Record<string, any>): string {
       <p>Nous sommes ravis de vous accueillir sur <strong>PioPi</strong>, la plateforme qui transforme l'apprentissage en aventure !</p>
 
       <div class="highlight">
-        <h3>🎁 Votre essai gratuit de 30 jours commence maintenant</h3>
+        <h3>🎁 Votre essai gratuit de 7 jours commence maintenant</h3>
         <p>Profitez de toutes les fonctionnalités premium sans aucune carte bancaire requise :</p>
         <ul>
           <li>✅ Accès illimité à tous les cours (CP à Terminale)</li>
@@ -205,7 +205,7 @@ function getEmailTemplate(template: string, data: Record<string, any>): string {
     <div class="content">
       <p>Bonjour ${data.parentName || ''},</p>
 
-      <p>Nous sommes ravis de confirmer votre abonnement à <strong>PioPi</strong> ! Votre période d'essai gratuit de 30 jours commence dès maintenant.</p>
+      <p>Nous sommes ravis de confirmer votre abonnement à <strong>PioPi</strong> ! Votre période d'essai gratuit de 7 jours commence dès maintenant.</p>
 
       <div class="subscription-box">
         <h3 style="text-align: center; color: #111827; margin-top: 0;">📋 Récapitulatif de votre abonnement</h3>
@@ -229,7 +229,7 @@ function getEmailTemplate(template: string, data: Record<string, any>): string {
 
         <div class="info-row" style="border-bottom: none;">
           <span class="info-label">Fin de l'essai gratuit :</span>
-          <span class="info-value">${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          <span class="info-value">${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
       </div>
 
@@ -407,10 +407,6 @@ function getEmailTemplate(template: string, data: Record<string, any>): string {
       </div>
 
       <p><strong>Vous avez changé d'avis ?</strong> Vous pouvez vous réabonner à tout moment depuis votre espace personnel.</p>
-
-      <div style="text-align: center;">
-        <a href="${baseUrl}?settings=subscription" class="button">Réactiver mon abonnement</a>
-      </div>
 
       <p>Nous sommes tristes de vous voir partir. N'hésitez pas à nous faire part de vos remarques pour nous améliorer !</p>
 
