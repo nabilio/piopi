@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Mail, Lock, User, Tag, CreditCard, ShieldCheck, X, Sparkles, Home, LogOut } from 'lucide-react';
+import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, Sparkles, Home, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
@@ -1168,11 +1168,13 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     const childrenCount = pending?.children ?? selectedChildren;
     const currentBillingPeriod = pending?.billingPeriod ?? billingPeriod;
     const displayPrice = currentBillingPeriod === 'monthly' ? planDetails.monthlyPrice : planDetails.yearlyPrice;
+    const billingPeriodLabel = currentBillingPeriod === 'monthly' ? 'mois' : 'an';
+    const formattedPrice = displayPrice.toFixed(2);
+    const planChargeReminder = `Le montant de l'abonnement (${formattedPrice} €/${billingPeriodLabel}) sera prélevé le ${firstChargeDateLabel} si vous poursuivez après l'essai.`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
         <div className="max-w-2xl mx-auto">
-          {renderStepIndicator('payment')}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1210,7 +1212,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="text-center mb-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Finalisez votre inscription</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Plan sélectionné</h2>
               <p className="text-gray-600">
                 Validez votre essai gratuit pour {childrenCount} {childrenCount > 1 ? 'enfants' : 'enfant'}.
               </p>
@@ -1225,12 +1227,19 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Après l'essai</p>
-                  <p className="text-2xl font-bold text-gray-900">{displayPrice.toFixed(2)} €/{currentBillingPeriod === 'monthly' ? 'mois' : 'an'}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formattedPrice} €/{billingPeriodLabel}</p>
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-3 text-sm text-blue-800">
-                <ShieldCheck size={18} />
-                Essai gratuit de {summaryTrialLabel} sans engagement
+              <div className="mt-4 text-sm text-blue-900">
+                <div className="flex items-center gap-3 text-blue-800">
+                  <ShieldCheck size={18} />
+                  Essai gratuit de {summaryTrialLabel} sans engagement
+                </div>
+                <div className="mt-3 space-y-2 pl-9">
+                  <p>Vous payez 0 € aujourd'hui.</p>
+                  <p>{planChargeReminder}</p>
+                  <p>{cancellationMessage}</p>
+                </div>
               </div>
             </div>
 
@@ -1240,32 +1249,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               </div>
             )}
 
-            <div className="bg-gray-50 rounded-xl p-6 mb-6">
-              <div className="flex items-start gap-4">
-                <CreditCard className="text-blue-500" size={28} />
-                <div className="text-sm text-gray-700 space-y-3">
-                  <p className="font-semibold">Paiements sécurisés (Stripe & PayPal)</p>
-                  <ul className="space-y-2">
-                    <li className="flex items-start gap-2">
-                      <Check className="text-green-500 mt-0.5" size={16} />
-                      <span>0 € prélevé aujourd'hui : votre essai gratuit démarre immédiatement.</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="text-green-500 mt-0.5" size={16} />
-                      <span>{dynamicPaymentReminder}</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="text-green-500 mt-0.5" size={16} />
-                      <span>{cancellationMessage}</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <ShieldCheck className="text-blue-500 mt-0.5" size={16} />
-                      <span>{securityMessage}</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Paiements sécurisés (Stripe & PayPal). {securityMessage}
+            </p>
 
             <button
               onClick={handleReturnToPlans}
