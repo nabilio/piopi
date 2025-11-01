@@ -52,7 +52,7 @@ import { TestQuizQuery } from './components/TestQuizQuery';
 import { StoriesLibrary } from './components/StoriesLibrary';
 import { useGamification } from './hooks/useGamification';
 import { Subject, Activity } from './lib/supabase';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
 import type { PlanId } from './utils/payment';
@@ -140,6 +140,8 @@ function AppContent() {
   const [childBirthdaysChildId, setChildBirthdaysChildId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'security' | 'notifications' | 'subscription' | 'children'>('profile');
   const [processedGoogleRegistration, setProcessedGoogleRegistration] = useState(false);
+  const [requiresPaymentSetup, setRequiresPaymentSetup] = useState(false);
+  const [checkingPaymentRequirement, setCheckingPaymentRequirement] = useState(false);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -257,6 +259,73 @@ function AppContent() {
   }, [user, profile, processedGoogleRegistration]);
 
   useEffect(() => {
+    let isActive = true;
+
+    async function evaluatePaymentRequirement() {
+      if (!user || !profile || profile.role !== 'parent' || !isSupabaseConfigured) {
+        if (isActive) {
+          setRequiresPaymentSetup(false);
+          setCheckingPaymentRequirement(false);
+        }
+        return;
+      }
+
+      if (isActive) {
+        setCheckingPaymentRequirement(true);
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select('status, subscription_start_date')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        let subscriptionRecord = data;
+
+        if (error) {
+          throw error;
+        }
+
+        if (!subscriptionRecord) {
+          const { data: legacyRecord, error: legacyError } = await supabase
+            .from('subscriptions')
+            .select('status, subscription_start_date')
+            .eq('parent_id', user.id)
+            .maybeSingle();
+
+          if (legacyError) {
+            throw legacyError;
+          }
+
+          subscriptionRecord = legacyRecord ?? null;
+        }
+
+        const hasValidatedPayment = Boolean(subscriptionRecord?.subscription_start_date) || subscriptionRecord?.status === 'active';
+
+        if (isActive) {
+          setRequiresPaymentSetup(!hasValidatedPayment);
+        }
+      } catch (subscriptionError) {
+        console.error('Failed to verify subscription status after registration:', subscriptionError);
+        if (isActive) {
+          setRequiresPaymentSetup(true);
+        }
+      } finally {
+        if (isActive) {
+          setCheckingPaymentRequirement(false);
+        }
+      }
+    }
+
+    evaluatePaymentRequirement();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user, profile, subscriptionRefreshTrigger]);
+
+  useEffect(() => {
       if (!user) {
         setView('home');
         setSelectedSubject(null);
@@ -284,6 +353,9 @@ function AppContent() {
   const isResetPasswordRoute = pathname === '/reset-password';
   const isTestQuizQueryRoute = searchParams.includes('test-quiz-query');
   const isChildQrLoginRoute = pathname === '/child-qr-login';
+  const shouldForceRegistration = Boolean(user && profile?.role === 'parent' && requiresPaymentSetup);
+  const shouldShowRegistration = showRegistration || shouldForceRegistration;
+  const isParentUser = Boolean(user && profile?.role === 'parent');
 
   // Vérifier si on est sur la page de confirmation d'email
   if (isConfirmEmailRoute) {
@@ -315,13 +387,25 @@ function AppContent() {
     );
   }
 
-  if (showRegistration) {
+  if (isParentUser && checkingPaymentRequirement && !showRegistration) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-purple-500 border-t-transparent mb-4"></div>
+          <p className="text-xl text-gray-600">Vérification de votre abonnement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (shouldShowRegistration) {
     return (
       <RegistrationPage
         initialPlanId={registrationPlanId}
         onSuccess={() => {
           setShowRegistration(false);
           setRegistrationPlanId(null);
+          setSubscriptionRefreshTrigger((prev) => prev + 1);
         }}
         onCancel={() => {
           setShowRegistration(false);
