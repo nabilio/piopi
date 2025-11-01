@@ -1,20 +1,19 @@
-import { useMemo, useState } from 'react';
-import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, ArrowLeft, ArrowRight, Users, Tag, Info, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 
 type PricingPlan = {
   children: number;
   monthlyPrice: number;
-  yearlyPrice: number;
 };
 
 const PRICING_PLANS: PricingPlan[] = [
-  { children: 1, monthlyPrice: 2.00, yearlyPrice: 20.00 },
-  { children: 2, monthlyPrice: 3.00, yearlyPrice: 30.00 },
-  { children: 3, monthlyPrice: 5.00, yearlyPrice: 50.00 },
-  { children: 4, monthlyPrice: 6.00, yearlyPrice: 60.00 },
-  { children: 5, monthlyPrice: 8.00, yearlyPrice: 80.00 },
+  { children: 1, monthlyPrice: 2.0 },
+  { children: 2, monthlyPrice: 3.0 },
+  { children: 3, monthlyPrice: 5.0 },
+  { children: 4, monthlyPrice: 6.0 },
+  { children: 5, monthlyPrice: 8.0 },
 ];
 
 type PlanSelectionProps = {
@@ -26,7 +25,6 @@ type PlanSelectionProps = {
 
 export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [selectedChildren, setSelectedChildren] = useState(1);
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [promoCode, setPromoCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +33,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline, activeDescription } = useTrialConfig();
 
   const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
-  const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
+  const price = selectedPlan.monthlyPrice;
   const pricePerChild = price / selectedChildren;
 
   const promoExtraDays = useMemo(() => {
@@ -120,7 +118,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         .from('subscriptions')
         .insert({
           user_id: user.id,
-          plan_type: billingPeriod,
+          plan_type: 'monthly',
           children_count: selectedChildren,
           price,
           status: 'trial',
@@ -138,7 +136,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
           user_id: user.id,
           children_count: selectedChildren,
           price: price,
-          plan_type: billingPeriod,
+          plan_type: 'monthly',
           action_type: 'trial_started',
           notes: promoCode && promoValidation?.valid
             ? `Essai gratuit de ${formattedTotalTrial} démarré avec le code promo: ${promoCode.toUpperCase()}`
@@ -218,38 +216,11 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          {/* Période de facturation */}
-          <div className="mb-10">
-            <h3 className="text-center text-xl font-bold text-gray-800 mb-4">
-              Choisissez votre période de facturation
-            </h3>
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => setBillingPeriod('monthly')}
-                className={`px-8 py-4 rounded-xl font-bold transition-all ${
-                  billingPeriod === 'monthly'
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Calendar className="inline-block mr-2" size={20} />
-                Mensuel
-              </button>
-              <button
-                onClick={() => setBillingPeriod('yearly')}
-                className={`px-8 py-4 rounded-xl font-bold transition-all relative ${
-                  billingPeriod === 'yearly'
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Calendar className="inline-block mr-2" size={20} />
-                Annuel
-                <span className="absolute -top-3 -right-3 bg-green-500 text-white text-xs px-3 py-1 rounded-full font-bold shadow-lg">
-                  Économisez 17%
-                </span>
-              </button>
-            </div>
+          <div className="mb-10 text-center">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Facturation mensuelle</h3>
+            <p className="text-sm text-gray-500">
+              Le paiement annuel n'est plus disponible. Toutes les formules sont facturées mensuellement.
+            </p>
           </div>
 
           <div className="border-t border-gray-200 pt-8 mb-8"></div>
@@ -261,7 +232,7 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
               {PRICING_PLANS.map(plan => {
-                const planPrice = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                const planPrice = plan.monthlyPrice;
                 const perChild = planPrice / plan.children;
                 const isSelected = selectedChildren === plan.children;
                 return (
@@ -287,10 +258,10 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
                       {planPrice.toFixed(2)}€
                     </div>
                     <div className="text-xs text-gray-500">
-                      /{billingPeriod === 'monthly' ? 'mois' : 'an'}
+                      /mois
                     </div>
                     <div className="text-xs text-gray-500 mt-2">
-                      {perChild.toFixed(2)}€ par enfant
+                      {perChild.toFixed(2)}€ par enfant et par mois
                     </div>
                   </button>
                 );
@@ -326,12 +297,12 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
                   Après votre essai gratuit :
                 </div>
                 <div className="text-4xl font-bold text-gray-900 mb-2">
-                  {price.toFixed(2)} €<span className="text-xl text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
+                  {price.toFixed(2)} €<span className="text-xl text-gray-600">/mois</span>
                 </div>
                 <div className="text-sm text-gray-600 space-y-1">
                   <div>Pour {selectedChildren} {selectedChildren === 1 ? 'enfant' : 'enfants'}</div>
                   <div className="font-semibold text-blue-600">
-                    Soit {pricePerChild.toFixed(2)}€ par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                    Soit {pricePerChild.toFixed(2)}€ par enfant par mois
                   </div>
                 </div>
               </div>
