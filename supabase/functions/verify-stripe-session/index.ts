@@ -58,6 +58,19 @@ Deno.serve(async (req) => {
       expand: ['payment_intent', 'subscription'],
     });
 
+    const subscription = typeof session.subscription === 'string'
+      ? null
+      : session.subscription;
+
+    const subscriptionStatus = subscription?.status ?? null;
+    const trialEndDate = subscription?.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null;
+    const subscriptionMetadata = subscription?.metadata ?? null;
+
+    const isTrialing = subscriptionStatus === 'trialing';
+    const normalizedPaymentStatus = isTrialing ? 'no_payment_required' : session.payment_status;
+
     if (session.client_reference_id !== user.id) {
       return new Response(JSON.stringify({ error: 'Session does not belong to user' }), {
         status: 403,
@@ -68,10 +81,13 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         status: session.status,
-        paymentStatus: session.payment_status,
+        paymentStatus: normalizedPaymentStatus,
         amountTotal: session.amount_total,
         currency: session.currency,
-        subscription: session.subscription,
+        subscriptionId: subscription?.id ?? (typeof session.subscription === 'string' ? session.subscription : null),
+        subscriptionStatus,
+        subscriptionMetadata,
+        trialEndDate,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
