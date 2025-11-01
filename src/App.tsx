@@ -426,6 +426,7 @@ function AppContent() {
         onSuccess={() => {
           setShowRegistration(false);
           setRegistrationPlanId(null);
+          setRequiresPaymentSetup(false);
           setSubscriptionRefreshTrigger((prev) => prev + 1);
         }}
         onCancel={() => {
