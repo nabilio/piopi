@@ -206,7 +206,17 @@ function clearRegistrationProgress() {
 
 export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: RegistrationPageProps) {
   const { user, profile, signIn, signInWithGoogle, signOut } = useAuth();
-  const [step, setStep] = useState<'plan' | 'details' | 'payment'>('plan');
+  const isAuthenticated = Boolean(user);
+  const [hasCompletedAccountCreation, setHasCompletedAccountCreation] = useState(() => Boolean(getPendingRegistration()));
+  const [step, setStep] = useState<'plan' | 'details' | 'payment'>(() => {
+    if (!initialPlanId) {
+      return 'plan';
+    }
+    if (isAuthenticated || hasCompletedAccountCreation) {
+      return 'payment';
+    }
+    return 'details';
+  });
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(initialPlanId ?? 'basic');
   const billingPeriod: BillingPeriod = 'monthly';
   const [formData, setFormData] = useState({
@@ -226,10 +236,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [finalizingPayment, setFinalizingPayment] = useState(false);
   const [processingPaymentReturn, setProcessingPaymentReturn] = useState(false);
   const [planStatusMessage, setPlanStatusMessage] = useState('');
-  const [hasCompletedAccountCreation, setHasCompletedAccountCreation] = useState(() => {
-    const pending = getPendingRegistration();
-    return Boolean(pending);
-  });
   const [hasManuallyResetPlanSelection, setHasManuallyResetPlanSelection] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [hasProcessedProgress, setHasProcessedProgress] = useState(false);
@@ -283,88 +289,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const dynamicPaymentReminder = `Aucun prélèvement aujourd'hui. Premier paiement le ${firstChargeDateLabel} si vous continuez après l'essai.`;
   const cancellationMessage = 'Annulez à tout moment depuis vos paramètres parent.';
   const pricePerChild = selectedPlan && selectedChildren > 0 ? price / selectedChildren : 0;
-  const isAuthenticated = Boolean(user);
   const shouldSkipDetails = isAuthenticated;
-
-  const registrationSteps = useMemo(
-    () =>
-      (isAuthenticated
-        ? [
-            {
-              id: 'plan' as const,
-              title: '1. Choisir votre plan',
-              description: 'Sélectionnez la formule adaptée à votre famille.',
-            },
-            {
-              id: 'payment' as const,
-              title: '2. Activer votre essai gratuit',
-              description: 'Validez votre essai gratuit avec un paiement sécurisé.',
-            },
-          ]
-        : [
-            {
-              id: 'plan' as const,
-              title: '1. Choisir votre plan',
-              description: 'Comparez nos offres et choisissez celle qui vous convient.',
-            },
-            {
-              id: 'details' as const,
-              title: '2. Créer votre compte',
-              description: 'Renseignez vos informations pour sécuriser votre accès parent.',
-            },
-            {
-              id: 'payment' as const,
-              title: '3. Activer votre essai gratuit',
-              description: 'Confirmez votre essai gratuit et votre moyen de paiement sécurisé.',
-            },
-          ]),
-    [isAuthenticated]
-  );
-
-  function renderStepIndicator(currentStep: 'plan' | 'details' | 'payment') {
-    if (registrationSteps.length === 0) {
-      return null;
-    }
-
-    const fallbackStepId = registrationSteps[registrationSteps.length - 1]?.id ?? 'payment';
-    const effectiveStep = registrationSteps.some((step) => step.id === currentStep) ? currentStep : fallbackStepId;
-    const activeIndex = registrationSteps.findIndex((step) => step.id === effectiveStep);
-    const safeActiveIndex = activeIndex === -1 ? registrationSteps.length - 1 : activeIndex;
-
-    return (
-      <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-stretch md:justify-between">
-          {registrationSteps.map((stepDefinition, index) => {
-            const isActive = index === safeActiveIndex;
-            const isCompleted = index < safeActiveIndex;
-            return (
-              <div key={stepDefinition.id} className="flex-1">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full font-semibold transition ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-lg'
-                        : isCompleted
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {index + 1}
-                  </div>
-                  <div>
-                    <p className={`text-sm font-semibold ${isActive ? 'text-blue-600' : 'text-gray-700'}`}>
-                      {stepDefinition.title}
-                    </p>
-                    <p className="text-xs text-gray-500">{stepDefinition.description}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
 
   useEffect(() => {
     if (!user) {
@@ -1251,7 +1176,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-md mx-auto">
-        {renderStepIndicator('details')}
         <div className="flex flex-wrap items-center justify-end gap-3 mb-6">
           {user && (
             <button
@@ -1403,6 +1327,17 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               {loading ? 'Inscription en cours...' : 'Créer mon compte'}
             </button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-gray-600">
+            Vous disposez déjà d'un compte ?{' '}
+            <button
+              type="button"
+              onClick={onCancel}
+              className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+            >
+              Connectez-vous
+            </button>
+          </div>
 
           <button
             onClick={() => setStep('plan')}
