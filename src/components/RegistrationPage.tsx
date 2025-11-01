@@ -415,42 +415,43 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       type SubscriptionRecord = { id: string; trial_end_date: string | null };
       let subscriptionRecord: SubscriptionRecord | null = null;
       let subscriptionKey: 'user_id' | 'parent_id' = 'user_id';
+      const subscriptionLookupErrors: unknown[] = [];
 
-      try {
-        const { data, error } = await supabase
-          .from('subscriptions')
-          .select<SubscriptionRecord>('id, trial_end_date')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select<SubscriptionRecord>('id, trial_end_date')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-        if (error) {
-          throw error;
-        }
-
-        if (data) {
-          subscriptionRecord = data;
-        } else {
-          const { data: legacyData, error: legacyError } = await supabase
-            .from('subscriptions')
-            .select<SubscriptionRecord>('id, trial_end_date')
-            .eq('parent_id', user.id)
-            .maybeSingle();
-
-          if (legacyError) {
-            throw legacyError;
-          }
-
-          if (legacyData) {
-            subscriptionRecord = legacyData;
-            subscriptionKey = 'parent_id';
-          }
-        }
-      } catch (subscriptionFetchError) {
-        console.error('Failed to load subscription before payment finalization:', subscriptionFetchError);
-        throw new Error('Impossible de retrouver votre abonnement après le paiement.');
+      if (error) {
+        subscriptionLookupErrors.push(error);
+      } else if (data) {
+        subscriptionRecord = data;
       }
 
       if (!subscriptionRecord) {
+        const { data: legacyData, error: legacyError } = await supabase
+          .from('subscriptions')
+          .select<SubscriptionRecord>('id, trial_end_date')
+          .eq('parent_id', user.id)
+          .maybeSingle();
+
+        if (legacyError) {
+          subscriptionLookupErrors.push(legacyError);
+        } else if (legacyData) {
+          subscriptionRecord = legacyData;
+          subscriptionKey = 'parent_id';
+        }
+      }
+
+      if (!subscriptionRecord) {
+        if (subscriptionLookupErrors.length > 0) {
+          subscriptionLookupErrors.forEach((lookupError) => {
+            console.error('Failed to load subscription before payment finalization:', lookupError);
+          });
+          throw new Error('Impossible de retrouver votre abonnement après le paiement.');
+        }
+
         throw new Error('Aucun abonnement n\'a été trouvé pour ce compte.');
       }
 
