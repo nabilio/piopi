@@ -7,7 +7,7 @@ import {
   recordLegacySubscriptionLookupFailure,
   recordLegacySubscriptionLookupSuccess,
 } from '../utils/subscriptionLegacy';
-import { Users, CheckCircle, ArrowRight, AlertCircle, LogOut, Baby, UserPlus, Plus, Edit } from 'lucide-react';
+import { Users, CheckCircle, LogOut, Baby, UserPlus, Plus } from 'lucide-react';
 import { Logo } from './Logo';
 import type { PlanId } from '../utils/payment';
 
@@ -154,7 +154,6 @@ function inferPlanFromCount(childrenCount: number): PlanId {
 export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<'add-child' | 'subscription-info'>('add-child');
   const [addedChildren, setAddedChildren] = useState<Array<{full_name: string; age: number; grade_level: string; character_type: string; accessories: string[]}>>([]);
   const [newChildData, setNewChildData] = useState({
     full_name: '',
@@ -165,13 +164,11 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
   });
   const [showChildForm, setShowChildForm] = useState(false);
   const [addingChild, setAddingChild] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [acceptedSubscription, setAcceptedSubscription] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo>({ childrenCount: 1, monthlyPrice: 2, planType: 'basic' });
-  const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionRecord | null>(null);
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completingOnboarding, setCompletingOnboarding] = useState(false);
 
   function applyCachedRegistrationPlan() {
     const cached = readCachedRegistrationPlan();
@@ -191,15 +188,26 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       monthlyPrice: planDetails.monthlyPrice,
       planType: cached.planId,
     });
-    setSelectedPlan(cached.planId);
     setSubscriptionError(null);
 
     return true;
   }
 
   useEffect(() => {
-    loadSubscription();
+    if (!user) {
+      return;
+    }
+    loadInitialData();
   }, [user]);
+
+  async function loadInitialData() {
+    setLoading(true);
+    try {
+      await Promise.all([loadSubscription(), loadExistingChildren()]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadSubscription() {
     if (!user) return;
@@ -253,7 +261,6 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
           monthlyPrice,
           planType: normalizedPlan,
         });
-        setSelectedPlan(normalizedPlan);
         setSubscriptionError(null);
         clearCachedRegistrationPlan();
       } else {
@@ -265,8 +272,54 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       if (!applyCachedRegistrationPlan()) {
         setSubscriptionError("Nous n'avons pas pu récupérer les informations de votre abonnement. Vos enfants seront tout de même enregistrés.");
       }
-    } finally {
-      setLoading(false);
+    }
+  }
+
+  type AvatarRecord = {
+    character_type: string | null;
+    accessories: string[] | null;
+  };
+
+  type ChildProfileRecord = {
+    full_name: string | null;
+    age: number | null;
+    grade_level: string | null;
+    avatars?: AvatarRecord | AvatarRecord[] | null;
+  };
+
+  async function loadExistingChildren() {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, age, grade_level, avatars(character_type, accessories)')
+        .eq('parent_id', user.id)
+        .eq('role', 'child');
+
+      if (error) {
+        throw error;
+      }
+
+      const formattedChildren = (data as ChildProfileRecord[] | null)?.map((child) => {
+        const avatarData = child.avatars
+          ? Array.isArray(child.avatars)
+            ? child.avatars[0] ?? null
+            : child.avatars
+          : null;
+
+        return {
+          full_name: child.full_name ?? '',
+          age: child.age ?? 0,
+          grade_level: child.grade_level ?? '',
+          character_type: avatarData?.character_type ?? 'explorer',
+          accessories: avatarData?.accessories ?? [],
+        };
+      }) ?? [];
+
+      setAddedChildren(formattedChildren);
+    } catch (err) {
+      console.error('Error loading existing children:', err);
     }
   }
 
@@ -364,43 +417,11 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
     }
   }
 
-  function handleNextStep() {
-    if (addedChildren.length === 0) {
-      alert('Veuillez ajouter au moins un enfant pour continuer.');
-      return;
-    }
-
-    const planType = subscription ? normalizePlanType(subscription.plan_type) : inferPlanFromCount(addedChildren.length);
-    const plan = PLAN_OPTION_MAP[planType];
-    const childrenCount = subscription?.children_count && subscription.children_count > 0
-      ? subscription.children_count
-      : plan?.childrenCount ?? Math.max(addedChildren.length, 1);
-    const monthlyPrice = subscription?.price ?? plan?.monthlyPrice ?? 0;
-
-    setSelectedPlan(planType);
-    setSubscriptionInfo({
-      childrenCount: Math.max(childrenCount, 1),
-      monthlyPrice,
-      planType
-    });
-
-    setStep('subscription-info');
-  }
-
-  function handlePlanSelection(planId: PlanId) {
-    setSelectedPlan(planId);
-    const plan = PLAN_OPTIONS.find(p => p.id === planId)!;
-    setSubscriptionInfo({
-      childrenCount: plan.childrenCount,
-      monthlyPrice: plan.monthlyPrice,
-      planType: plan.id
-    });
-  }
-
   async function handleCompleteOnboarding() {
     if (!user) return;
 
     try {
+      setCompletingOnboarding(true);
       // Mark parent onboarding as completed
       await supabase
         .from('profiles')
@@ -431,24 +452,18 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
       console.error('Error completing onboarding:', err);
       clearCachedRegistrationPlan();
       onComplete();
+    } finally {
+      setCompletingOnboarding(false);
     }
   }
 
-  async function handleSkipForNow() {
-    if (!user) return;
-
-    try {
-      // Mark onboarding as completed even without adding a child
-      await supabase
-        .from('profiles')
-        .update({ onboarding_completed: true })
-        .eq('id', user.id);
-
-      clearCachedRegistrationPlan();
-      onComplete();
-    } catch (err) {
-      console.error('Error completing onboarding:', err);
+  async function handleValidateChildren() {
+    if (addedChildren.length === 0) {
+      alert('Veuillez ajouter au moins un enfant pour continuer.');
+      return;
     }
+
+    await handleCompleteOnboarding();
   }
 
   if (loading) {
@@ -786,204 +801,29 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
 
       {addedChildren.length > 0 && !showChildForm && (
         <button
-          onClick={handleNextStep}
-          className="w-full py-4 mt-4 bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+          onClick={handleValidateChildren}
+          disabled={addedChildren.length === 0 || completingOnboarding}
+          className="w-full py-4 mt-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <ArrowRight size={20} />
-          Suivant
+          {completingOnboarding ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+              Validation...
+            </>
+          ) : (
+            <>
+              <CheckCircle size={20} />
+              Valider
+            </>
+          )}
         </button>
       )}
     </div>
   );
-
-  // Step 2: Subscription info
-  const renderSubscriptionInfoStep = () => {
-    const activePlan = selectedPlan ?? normalizedPlanType;
-    const formattedMonthlyPrice = subscriptionInfo.monthlyPrice.toFixed(2);
-
-    return (
-      <div className="bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
-            <CheckCircle className="text-blue-500" size={40} />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Récapitulatif de votre abonnement
-          </h2>
-          <p className="text-gray-600">
-            Vérifiez les informations avant de continuer
-          </p>
-        </div>
-
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5 mb-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Enfants inscrits ({addedChildren.length})</h3>
-          <div className="space-y-2">
-            {addedChildren.map((child, index) => (
-              <div key={index} className="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-200">
-                <CheckCircle className="text-blue-600" size={20} />
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{child.full_name}</p>
-                  <p className="text-sm text-gray-600">{child.age} ans - {child.grade_level}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h3 className="text-2xl font-bold text-gray-900 mb-4 text-center">
-            Votre abonnement
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {PLAN_OPTIONS.map((plan) => {
-              const isSelected = plan.id === activePlan;
-              const canSelect = plan.id === activePlan;
-
-              return (
-                <button
-                  key={plan.id}
-                  onClick={() => canSelect && handlePlanSelection(plan.id)}
-                  disabled={!canSelect}
-                  className={`relative p-5 rounded-xl border-2 transition text-left ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h4 className="text-xl font-bold text-gray-900">{plan.name}</h4>
-                      <p className="text-sm text-gray-600">{plan.description}</p>
-                    </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                      isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                    }`}>
-                      {isSelected && <CheckCircle className="text-white" size={16} />}
-                    </div>
-                  </div>
-                  <div className="text-3xl font-black text-blue-600">
-                    {plan.monthlyPrice.toFixed(2)}€<span className="text-lg font-semibold text-gray-600">/mois</span>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {plan.pricePerChild.toFixed(2)}€ par enfant
-                  </p>
-                  {!isSelected && (
-                    <p className="text-xs text-gray-500 mt-2">
-                      Plan sélectionné automatiquement lors de votre inscription
-                    </p>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-50 to-green-50 rounded-2xl p-6">
-            <div className="text-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Votre abonnement sélectionné
-              </h3>
-              <div className="flex items-center justify-center gap-3">
-                <Users className="text-blue-500" size={28} />
-                <p className="text-3xl font-black text-gray-900">
-                  {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-3 bg-white rounded-xl p-6">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-gray-700">
-                  <strong>Sans engagement</strong> - Annulation à tout moment
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-gray-700">
-                  <strong>Essai gratuit activé</strong> - Profitez de l'expérience complète dès aujourd'hui
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-gray-700">
-                  <strong>Paiement sécurisé enregistré</strong> - Votre moyen de paiement est prêt pour la suite
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-6 mb-6">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-            <div>
-              <p className="text-sm text-yellow-800">
-                <strong>Important :</strong> Votre période d'essai gratuit vient de commencer. Vous pourrez annuler à tout moment depuis les paramètres.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 mb-6">
-          <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedSubscription ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
-            <input
-              type="checkbox"
-              checked={acceptedSubscription}
-              onChange={(e) => setAcceptedSubscription(e.target.checked)}
-              className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700 font-semibold">
-              Je confirme mon abonnement de {formattedMonthlyPrice}€/mois pour {subscriptionInfo.childrenCount} enfant{subscriptionInfo.childrenCount > 1 ? 's' : ''}
-            </span>
-          </label>
-
-          <label className={`flex items-start gap-3 cursor-pointer p-4 border-2 rounded-xl transition hover:bg-gray-50 ${acceptedTerms ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">
-              J'accepte les{' '}
-              <a href="/terms" target="_blank" className="text-blue-600 hover:underline font-semibold">
-                conditions d'utilisation
-              </a>
-              {' '}et la{' '}
-              <a href="/privacy" target="_blank" className="text-blue-600 hover:underline font-semibold">
-                politique de confidentialité
-              </a>
-              {' '}d'PioPi.
-            </span>
-          </label>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => setStep('add-child')}
-            className="flex-1 py-4 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-bold rounded-xl transition text-lg flex items-center justify-center gap-2"
-          >
-            <Edit size={20} />
-            Modifier
-          </button>
-          <button
-            onClick={handleCompleteOnboarding}
-            disabled={!acceptedTerms || !acceptedSubscription}
-            className="flex-1 py-4 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 disabled:from-gray-300 disabled:to-gray-300 text-white font-bold rounded-xl transition text-lg shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-          >
-            <ArrowRight size={20} />
-            Commencer
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-2xl mx-auto">
-        {step === 'add-child' && renderAddChildStep()}
-        {step === 'subscription-info' && renderSubscriptionInfoStep()}
+        {renderAddChildStep()}
       </div>
     </div>
   );

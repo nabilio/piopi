@@ -10,6 +10,7 @@ import {
   recordLegacySubscriptionLookupFailure,
   recordLegacySubscriptionLookupSuccess,
 } from '../utils/subscriptionLegacy';
+import { Logo } from './Logo';
 
 type PricingPlan = {
   planId: PlanId;
@@ -161,6 +162,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const [paymentError, setPaymentError] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [finalizingPayment, setFinalizingPayment] = useState(false);
+  const [processingPaymentReturn, setProcessingPaymentReturn] = useState(false);
   const [planStatusMessage, setPlanStatusMessage] = useState('');
   const [hasCompletedAccountCreation, setHasCompletedAccountCreation] = useState(() => {
     const pending = getPendingRegistration();
@@ -565,6 +567,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       console.error('Erreur lors de la validation du paiement:', err);
       const message = err instanceof Error ? err.message : 'Impossible de valider le paiement.';
       setPaymentError(message);
+      setProcessingPaymentReturn(false);
     } finally {
       setFinalizingPayment(false);
     }
@@ -584,9 +587,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (registrationStatus === 'success') {
       const sessionId = params.get('session_id');
       if (sessionId && pending) {
+        setProcessingPaymentReturn(true);
         finalizeStripePayment(sessionId, pending);
       } else {
         setPaymentError('Impossible de retrouver la session de paiement.');
+        setProcessingPaymentReturn(false);
       }
     } else if (registrationStatus === 'cancel') {
       if (typeof window !== 'undefined') {
@@ -1026,6 +1031,23 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }
 
   if (step === 'payment') {
+    if (processingPaymentReturn || finalizingPayment) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center px-4">
+          <Logo className="h-12 mb-6" />
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center space-y-4">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Validation du paiement en cours...</h2>
+            <p className="text-gray-600">
+              Merci d'avoir confirmé votre abonnement. Nous préparons votre espace parent et vous y serez redirigé automatiquement.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     const pending = getPendingRegistration();
     const planDetails = pending
       ? PRICING_PLANS.find((plan) => plan.planId === pending.planId) ?? selectedPlan ?? PRICING_PLANS[0]
