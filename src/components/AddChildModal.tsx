@@ -274,7 +274,7 @@ export function AddChildModal({ isOpen, onClose, onSuccess, existingChildrenCoun
                 }
               </p>
               <p className="text-sm text-gray-600 mb-4">
-                Plan {planName} : Base {baseChildren} enfants à 8€/mois + 2€ par enfant supplémentaire
+                Plan {planName} : Base {baseChildren} enfants à 8€/mois avec tarification flexible pour chaque enfant supplémentaire
               </p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

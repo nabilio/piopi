@@ -63,7 +63,7 @@ const PLANS: Plan[] = [
       'Suivi de progression détaillé',
       'Mode bataille',
       'Réseau social sécurisé',
-      'Économie de 25% par enfant'
+      'Tarif avantageux pour deux enfants'
     ],
     recommended: true,
     badge: 'Le plus populaire'
@@ -79,7 +79,7 @@ const PLANS: Plan[] = [
       'Suivi de progression avancé',
       'Mode bataille',
       'Réseau social sécurisé',
-      'Économie de 17% par enfant'
+      'Tarif avantageux pour trois enfants'
     ]
   },
   {
@@ -94,7 +94,7 @@ const PLANS: Plan[] = [
       'Mode bataille',
       'Réseau social sécurisé',
       'Support prioritaire',
-      'Économie de 25% par enfant'
+      'Tarif avantageux pour quatre enfants'
     ],
     badge: 'Meilleure offre'
   },
@@ -105,7 +105,7 @@ const PLANS: Plan[] = [
     pricePerMonth: 8,
     features: [
       'Jusqu\'à 5 enfants inclus',
-      '+2€ par enfant supplémentaire',
+      'Ajoutez des enfants supplémentaires quand vous le souhaitez',
       'Tous les cours et exercices',
       'Suivi de progression avancé',
       'Mode bataille',
