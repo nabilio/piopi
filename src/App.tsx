@@ -57,6 +57,12 @@ import { useAutoFullscreen } from './hooks/useAutoFullscreen';
 import { ChildQRLoginPage } from './components/ChildQRLoginPage';
 import type { PlanId } from './utils/payment';
 import { RegistrationPage, PENDING_REGISTRATION_STORAGE_KEY } from './components/RegistrationPage';
+import {
+  isMissingColumnError,
+  shouldAttemptLegacySubscriptionLookup,
+  recordLegacySubscriptionLookupFailure,
+  recordLegacySubscriptionLookupSuccess,
+} from './utils/subscriptionLegacy';
 
 type View = 'home' | 'parent-home' | 'courses' | 'subject-intro' | 'subject' | 'lesson' | 'coach' | 'parent-dashboard' | 'parent-birthdays' | 'child-birthdays' | 'activity' | 'quiz' | 'admin' | 'social' | 'friends' | 'public-feed' | 'settings' | 'network' | 'contact' | 'terms' | 'privacy' | 'legal' | 'child-activity' | 'notifications' | 'child-profile' | 'user-profile' | 'battle-hub' | 'battle-waiting' | 'battle-arena' | 'battle-results' | 'add-child-upgrade' | 'upgrade-plan' | 'stories';
 
@@ -281,13 +287,19 @@ function AppContent() {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        let subscriptionRecord = data;
+        type SubscriptionRecord = { status: string | null; subscription_start_date: string | null } | null;
+        let subscriptionRecord: SubscriptionRecord = null;
+        const shouldAttemptLegacyLookup = error ? shouldAttemptLegacySubscriptionLookup(error) : false;
 
         if (error) {
-          throw error;
+          if (!shouldAttemptLegacyLookup) {
+            throw error;
+          }
+        } else {
+          subscriptionRecord = data ?? null;
         }
 
-        if (!subscriptionRecord) {
+        if (!subscriptionRecord && shouldAttemptLegacyLookup) {
           const { data: legacyRecord, error: legacyError } = await supabase
             .from('subscriptions')
             .select('status, subscription_start_date')
@@ -295,10 +307,16 @@ function AppContent() {
             .maybeSingle();
 
           if (legacyError) {
-            throw legacyError;
+            recordLegacySubscriptionLookupFailure(legacyError);
+            if (!isMissingColumnError(legacyError)) {
+              throw legacyError;
+            }
+          } else {
+            subscriptionRecord = legacyRecord ?? null;
+            if (subscriptionRecord) {
+              recordLegacySubscriptionLookupSuccess();
+            }
           }
-
-          subscriptionRecord = legacyRecord ?? null;
         }
 
         const hasValidatedPayment = Boolean(subscriptionRecord?.subscription_start_date) || subscriptionRecord?.status === 'active';
