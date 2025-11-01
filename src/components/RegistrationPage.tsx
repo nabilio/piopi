@@ -78,13 +78,12 @@ const PRICING_PLANS: PricingPlan[] = [
     monthlyPrice: 6.0,
     yearlyPrice: 60.0,
     badge: 'Meilleure offre',
-    highlight: 'Support prioritaire inclus',
+    highlight: 'Tarif avantageux pour 4 enfants',
     features: [
       'Tous les cours et exercices',
       'Suivi de progression avancé',
       'Mode bataille',
       'Réseau social sécurisé',
-      'Support prioritaire',
     ],
   },
   {
@@ -102,7 +101,6 @@ const PRICING_PLANS: PricingPlan[] = [
       'Suivi de progression avancé',
       'Mode bataille',
       'Réseau social sécurisé',
-      'Support prioritaire VIP',
     ],
   },
 ];
@@ -113,13 +111,15 @@ type RegistrationPageProps = {
   initialPlanId?: PlanId | null;
 };
 
+type BillingPeriod = 'monthly';
+
 type PendingRegistrationPayment = {
   sessionId?: string;
   planId: PlanId;
   children: number;
   email: string;
   fullName: string;
-  billingPeriod: 'monthly' | 'yearly';
+  billingPeriod: BillingPeriod;
 };
 
 export const PENDING_REGISTRATION_STORAGE_KEY = 'pendingRegistrationPayment';
@@ -129,13 +129,13 @@ const REGISTRATION_PROGRESS_STORAGE_KEY = 'registrationProgressState';
 type CompletedRegistrationPlan = {
   planId: PlanId;
   children: number;
-  billingPeriod: 'monthly' | 'yearly';
+  billingPeriod: BillingPeriod;
 };
 
 type RegistrationProgressState = {
   step: 'plan' | 'details' | 'payment';
   planId: PlanId;
-  billingPeriod: 'monthly' | 'yearly';
+  billingPeriod: BillingPeriod;
 };
 
 function cacheCompletedRegistration(plan: CompletedRegistrationPlan) {
@@ -160,14 +160,17 @@ function getSavedRegistrationProgress(): RegistrationProgressState | null {
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<RegistrationProgressState>;
+    const parsed = JSON.parse(raw) as Partial<RegistrationProgressState> & { billingPeriod?: string };
     if (
       parsed &&
       (parsed.step === 'plan' || parsed.step === 'details' || parsed.step === 'payment') &&
-      typeof parsed.planId === 'string' &&
-      (parsed.billingPeriod === 'monthly' || parsed.billingPeriod === 'yearly')
+      typeof parsed.planId === 'string'
     ) {
-      return parsed as RegistrationProgressState;
+      return {
+        step: parsed.step,
+        planId: parsed.planId as PlanId,
+        billingPeriod: 'monthly',
+      };
     }
   } catch (parseError) {
     console.error('Failed to parse registration progress state:', parseError);
@@ -205,7 +208,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const { user, profile, signIn, signInWithGoogle, signOut } = useAuth();
   const [step, setStep] = useState<'plan' | 'details' | 'payment'>('plan');
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(initialPlanId ?? 'basic');
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const billingPeriod: BillingPeriod = 'monthly';
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -242,11 +245,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     [selectedPlanId]
   );
   const selectedChildren = selectedPlan?.children ?? 0;
-  const price = selectedPlan
-    ? billingPeriod === 'monthly'
-      ? selectedPlan.monthlyPrice
-      : selectedPlan.yearlyPrice
-    : 0;
+  const price = selectedPlan ? selectedPlan.monthlyPrice : 0;
 
   const promoExtraDays = useMemo(() => {
     if (!promoValidation?.valid) return 0;
@@ -272,7 +271,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     }
 
     setSelectedPlanId(progress.planId);
-    setBillingPeriod(progress.billingPeriod);
     setStep('payment');
     setHasProcessedProgress(true);
   }, []);
@@ -549,7 +547,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     const raw = localStorage.getItem(PENDING_REGISTRATION_STORAGE_KEY);
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as PendingRegistrationPayment;
+      const parsed = JSON.parse(raw) as PendingRegistrationPayment & { billingPeriod?: string };
+      return {
+        ...parsed,
+        billingPeriod: 'monthly',
+      };
     } catch (parseError) {
       console.error('Failed to parse pending registration data:', parseError);
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
@@ -599,7 +601,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         throw new Error('Le plan sélectionné est introuvable.');
       }
 
-      const amount = pending.billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+      const amount = plan.monthlyPrice;
       const subscriptionStartDate = new Date();
       const normalizedStatus = verification.paymentStatus === 'paid' ? 'active' : 'trial';
 
@@ -801,7 +803,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (pending) {
       setHasCompletedAccountCreation(true);
       setSelectedPlanId(pending.planId);
-      setBillingPeriod(pending.billingPeriod);
       if (step !== 'payment') {
         setStep('payment');
       }
@@ -868,7 +869,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     }
     clearRegistrationProgress();
     setSelectedPlanId(null);
-    setBillingPeriod('monthly');
     setPaymentError('');
     setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
     setPaymentLoading(false);
@@ -995,96 +995,81 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 {planStatusMessage}
               </div>
             )}
-            <div className="flex items-center justify-center gap-4 mb-10">
-              <button
-                onClick={() => setBillingPeriod('monthly')}
-                className={`px-6 py-3 rounded-xl font-semibold transition ${
-                  billingPeriod === 'monthly'
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Mensuel
-              </button>
-              <button
-                onClick={() => setBillingPeriod('yearly')}
-                className={`px-6 py-3 rounded-xl font-semibold transition relative ${
-                  billingPeriod === 'yearly'
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Annuel
-                <span className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                  -17%
-                </span>
-              </button>
+            <div className="flex flex-col items-center justify-center mb-10">
+              <div className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold bg-blue-500 text-white shadow-lg">
+                Facturation mensuelle
+              </div>
+              <p className="mt-3 text-sm text-gray-500">
+                Le paiement annuel n'est plus disponible. Chaque plan est facturé mensuellement.
+              </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-              {PRICING_PLANS.map((plan) => {
-                const priceForPeriod = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                const perChild = priceForPeriod / plan.children;
-                const isSelected = plan.planId === selectedPlanId;
+            <div className="overflow-x-auto pb-4">
+              <div className="flex flex-col gap-6 md:flex-row md:flex-nowrap">
+                {PRICING_PLANS.map((plan) => {
+                  const priceForPeriod = plan.monthlyPrice;
+                  const perChild = priceForPeriod / plan.children;
+                  const isSelected = plan.planId === selectedPlanId;
 
-                return (
-                  <div
-                    key={plan.planId}
-                    onClick={() => setSelectedPlanId(plan.planId)}
-                    className={`relative rounded-2xl border-2 p-6 transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50/60 shadow-xl scale-[1.02]'
-                        : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-lg'
-                    }`}
-                  >
-                    {plan.badge && (
-                      <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl">
-                        {plan.badge}
-                      </div>
-                    )}
-                    <div className="text-center mb-6">
-                      <h3 className="text-2xl font-black text-gray-800 mb-2">{plan.name}</h3>
-                      <div className="flex items-baseline justify-center gap-1 mb-2">
-                        <span className={`text-4xl font-black ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
-                          {priceForPeriod.toFixed(2)}€
-                        </span>
-                        <span className="text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
-                      </div>
-                      <p className="text-sm text-gray-600">{plan.childrenLabel}</p>
-                      {plan.highlight && (
-                        <div className="mt-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
-                          <p className="text-xs text-green-700 font-semibold">{plan.highlight}</p>
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-3">
-                        Soit {perChild.toFixed(2)}€ par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
-                      </p>
-                    </div>
-                    <ul className="space-y-3 mb-6 text-sm text-gray-700">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2">
-                          <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handlePlanSelection(plan);
-                      }}
-                      className={`w-full py-3 rounded-xl font-bold transition ${
+                  return (
+                    <div
+                      key={plan.planId}
+                      onClick={() => setSelectedPlanId(plan.planId)}
+                      className={`relative rounded-2xl border-2 p-6 transition-all cursor-pointer w-full md:w-64 xl:w-72 ${
                         isSelected
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:from-blue-600 hover:to-purple-600'
-                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                          ? 'border-blue-500 bg-blue-50/60 shadow-xl scale-[1.02]'
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-lg'
                       }`}
                     >
-                      {shouldSkipDetails ? 'Choisir' : 'Choisir ce plan'}
-                    </button>
-                  </div>
-                );
-              })}
+                      {plan.badge && (
+                        <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl">
+                          {plan.badge}
+                        </div>
+                      )}
+                      <div className="text-center mb-6">
+                        <h3 className="text-2xl font-black text-gray-800 mb-2">{plan.name}</h3>
+                        <div className="flex items-baseline justify-center gap-1 mb-2">
+                          <span className={`text-4xl font-black ${isSelected ? 'text-blue-600' : 'text-gray-800'}`}>
+                            {priceForPeriod.toFixed(2)}€
+                          </span>
+                          <span className="text-gray-600">/mois</span>
+                        </div>
+                        <p className="text-sm text-gray-600">{plan.childrenLabel}</p>
+                        {plan.highlight && (
+                          <div className="mt-2 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+                            <p className="text-xs text-green-700 font-semibold">{plan.highlight}</p>
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500 mt-3">
+                          Soit {perChild.toFixed(2)}€ par enfant par mois
+                        </p>
+                      </div>
+                      <ul className="space-y-3 mb-6 text-sm text-gray-700">
+                        {plan.features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2">
+                            <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handlePlanSelection(plan);
+                        }}
+                        className={`w-full py-3 rounded-xl font-bold transition ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:from-blue-600 hover:to-purple-600'
+                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        }`}
+                      >
+                        {shouldSkipDetails ? 'Choisir' : 'Choisir ce plan'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -1187,11 +1172,10 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       ? PRICING_PLANS.find((plan) => plan.planId === pending.planId) ?? selectedPlan ?? PRICING_PLANS[0]
       : selectedPlan ?? PRICING_PLANS[0];
     const childrenCount = pending?.children ?? selectedChildren;
-    const currentBillingPeriod = pending?.billingPeriod ?? billingPeriod;
-    const displayPrice = currentBillingPeriod === 'monthly' ? planDetails.monthlyPrice : planDetails.yearlyPrice;
-    const billingPeriodLabel = currentBillingPeriod === 'monthly' ? 'mois' : 'an';
+    const displayPrice = planDetails.monthlyPrice;
+    const billingPeriodLabel = 'mois';
     const formattedPrice = displayPrice.toFixed(2);
-    const planChargeReminder = `Le montant de l'abonnement (${formattedPrice} €/${billingPeriodLabel}) sera prélevé le ${firstChargeDateLabel} si vous poursuivez après l'essai.`;
+    const planChargeReminder = `Le montant de l'abonnement (${formattedPrice} €/mois) sera prélevé le ${firstChargeDateLabel} si vous poursuivez après l'essai.`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
@@ -1339,11 +1323,10 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             {selectedPlan ? (
               <>
                 <p className="text-gray-600">
-                  Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/
-                  {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                  Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/mois
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                  Soit {pricePerChild.toFixed(2)} € par enfant par mois
                 </p>
               </>
             ) : (
