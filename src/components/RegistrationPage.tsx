@@ -124,10 +124,17 @@ type PendingRegistrationPayment = {
 
 export const PENDING_REGISTRATION_STORAGE_KEY = 'pendingRegistrationPayment';
 const LAST_COMPLETED_REGISTRATION_KEY = 'lastCompletedRegistrationPlan';
+const REGISTRATION_PROGRESS_STORAGE_KEY = 'registrationProgressState';
 
 type CompletedRegistrationPlan = {
   planId: PlanId;
   children: number;
+  billingPeriod: 'monthly' | 'yearly';
+};
+
+type RegistrationProgressState = {
+  step: 'plan' | 'details' | 'payment';
+  planId: PlanId;
   billingPeriod: 'monthly' | 'yearly';
 };
 
@@ -139,6 +146,58 @@ function cacheCompletedRegistration(plan: CompletedRegistrationPlan) {
     localStorage.setItem(LAST_COMPLETED_REGISTRATION_KEY, JSON.stringify(plan));
   } catch (storageError) {
     console.error('Failed to cache completed registration plan:', storageError);
+  }
+}
+
+function getSavedRegistrationProgress(): RegistrationProgressState | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = localStorage.getItem(REGISTRATION_PROGRESS_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<RegistrationProgressState>;
+    if (
+      parsed &&
+      (parsed.step === 'plan' || parsed.step === 'details' || parsed.step === 'payment') &&
+      typeof parsed.planId === 'string' &&
+      (parsed.billingPeriod === 'monthly' || parsed.billingPeriod === 'yearly')
+    ) {
+      return parsed as RegistrationProgressState;
+    }
+  } catch (parseError) {
+    console.error('Failed to parse registration progress state:', parseError);
+  }
+
+  localStorage.removeItem(REGISTRATION_PROGRESS_STORAGE_KEY);
+  return null;
+}
+
+function persistRegistrationProgress(progress: RegistrationProgressState) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.setItem(REGISTRATION_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+  } catch (storageError) {
+    console.error('Failed to persist registration progress state:', storageError);
+  }
+}
+
+function clearRegistrationProgress() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    localStorage.removeItem(REGISTRATION_PROGRESS_STORAGE_KEY);
+  } catch (storageError) {
+    console.error('Failed to clear registration progress state:', storageError);
   }
 }
 
@@ -170,6 +229,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   });
   const [hasManuallyResetPlanSelection, setHasManuallyResetPlanSelection] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [hasProcessedProgress, setHasProcessedProgress] = useState(false);
   const {
     baseTrialDays,
     formattedBaseTrial,
@@ -198,6 +258,26 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const totalTrialDays = baseTrialDays + promoExtraDays;
   const formattedTotalTrial = formatTrialDuration(totalTrialDays);
   const summaryTrialLabel = promoValidation?.valid ? formattedTotalTrial : formattedBaseTrial;
+
+  useEffect(() => {
+    const progress = getSavedRegistrationProgress();
+    if (!progress || progress.step !== 'payment') {
+      setHasProcessedProgress(true);
+      return;
+    }
+
+    const planExists = PRICING_PLANS.some((plan) => plan.planId === progress.planId);
+    if (!planExists) {
+      clearRegistrationProgress();
+      setHasProcessedProgress(true);
+      return;
+    }
+
+    setSelectedPlanId(progress.planId);
+    setBillingPeriod(progress.billingPeriod);
+    setStep('payment');
+    setHasProcessedProgress(true);
+  }, []);
   const firstChargeDate = useMemo(() => {
     const date = new Date();
     date.setDate(date.getDate() + totalTrialDays);
@@ -338,6 +418,22 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       setStep('payment');
     }
   }, [shouldSkipDetails, hasCompletedAccountCreation, step]);
+
+  useEffect(() => {
+    if (!hasProcessedProgress) {
+      return;
+    }
+
+    if (step === 'payment' && selectedPlanId) {
+      persistRegistrationProgress({
+        step: 'payment',
+        planId: selectedPlanId,
+        billingPeriod,
+      });
+    } else if (step !== 'payment') {
+      clearRegistrationProgress();
+    }
+  }, [step, selectedPlanId, billingPeriod, hasProcessedProgress]);
 
   function handlePlanSelection(plan: PricingPlan) {
     setSelectedPlanId(plan.planId);
@@ -651,6 +747,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       });
 
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
+      clearRegistrationProgress();
       onSuccess();
     } catch (err: unknown) {
       console.error('Erreur lors de la validation du paiement:', err);
@@ -771,6 +868,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
+    clearRegistrationProgress();
     setSelectedPlanId(null);
     setBillingPeriod('monthly');
     setPaymentError('');
@@ -785,6 +883,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
+    clearRegistrationProgress();
     setHasCompletedAccountCreation(false);
   }
 
@@ -1177,13 +1276,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         <div className="max-w-2xl mx-auto">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleReturnHome}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
-              >
-                <Home size={20} />
-                Retour à l'accueil
-              </button>
               <button
                 onClick={handleReturnToPlans}
                 className="flex items-center gap-2 text-gray-600 hover:text-gray-800 font-semibold"
