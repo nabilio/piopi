@@ -93,6 +93,47 @@ type Profile = {
   email_confirmed_at?: string | null;
 };
 
+type SubscriptionRecord = {
+  plan_type: string;
+  status: string;
+  subscription_end_date: string | null;
+  trial_end_date?: string | null;
+};
+
+type SubscriptionModalState = {
+  isOpen: boolean;
+  loading: boolean;
+  saving: boolean;
+  user: Profile | null;
+  planType: string;
+  activationEndDate: string;
+  status: string;
+  error: string | null;
+  success: string | null;
+};
+
+const SUBSCRIPTION_PLAN_OPTIONS: { value: string; label: string }[] = [
+  { value: 'basic', label: 'Basique • 1 enfant' },
+  { value: 'duo', label: 'Duo • 2 enfants' },
+  { value: 'family', label: 'Famille • 3 enfants' },
+  { value: 'premium', label: 'Premium • 4 enfants' },
+  { value: 'liberte', label: 'Liberté • 5+ enfants' },
+];
+
+function createInitialSubscriptionModal(): SubscriptionModalState {
+  return {
+    isOpen: false,
+    loading: false,
+    saving: false,
+    user: null,
+    planType: 'basic',
+    activationEndDate: '',
+    status: 'inactive',
+    error: null,
+    success: null,
+  };
+}
+
 const GRADE_LEVELS = ['CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 
 type AdminView = 'dashboard' | 'levels' | 'quiz' | 'lessons' | 'users' | 'activities' | 'ai-generator' | 'settings' | 'subjects-manager' | 'lessons-manager' | 'quiz-manager' | 'coach-test' | 'prompts' | 'student-simulator' | 'custom-statuses' | 'promotions';
@@ -192,6 +233,7 @@ export function AdminPanel() {
     validUntil: '',
     active: true,
   });
+  const [subscriptionModal, setSubscriptionModal] = useState<SubscriptionModalState>(() => createInitialSubscriptionModal());
 
   useEffect(() => {
     loadData();
@@ -974,6 +1016,110 @@ export function AdminPanel() {
       user.email.toLowerCase().includes(searchLower)
     );
   });
+
+  function formatDateForInput(date: string | null | undefined): string {
+    if (!date) return '';
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toISOString().split('T')[0];
+  }
+
+  async function openSubscriptionModal(user: Profile) {
+    setSubscriptionModal({
+      ...createInitialSubscriptionModal(),
+      isOpen: true,
+      loading: true,
+      user,
+      planType: 'basic',
+      status: 'active',
+    });
+
+    try {
+      const { data, error } = await supabase
+        .from<SubscriptionRecord>('subscriptions')
+        .select('plan_type, status, subscription_end_date, trial_end_date')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const planType = data?.plan_type || 'basic';
+      const status = data?.status || 'active';
+      const activationEndDate = formatDateForInput(data?.subscription_end_date || data?.trial_end_date || null);
+
+      setSubscriptionModal(prev => ({
+        ...prev,
+        loading: false,
+        planType,
+        status,
+        activationEndDate,
+      }));
+    } catch (error: any) {
+      console.error('Erreur chargement abonnement:', error);
+      setSubscriptionModal(prev => ({
+        ...prev,
+        loading: false,
+        error: error?.message || 'Impossible de charger les informations abonnement',
+      }));
+    }
+  }
+
+  function closeSubscriptionModal() {
+    setSubscriptionModal(createInitialSubscriptionModal());
+  }
+
+  async function handleSaveSubscription() {
+    if (!subscriptionModal.user) return;
+
+    try {
+      setSubscriptionModal(prev => ({ ...prev, saving: true, error: null, success: null }));
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Session non disponible');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-subscription`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: subscriptionModal.user.id,
+          planType: subscriptionModal.planType,
+          activationEndDate: subscriptionModal.activationEndDate || null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Erreur lors de la mise à jour de l\'abonnement');
+      }
+
+      const updated: SubscriptionRecord | null = result?.subscription ?? null;
+
+      setSubscriptionModal(prev => ({
+        ...prev,
+        saving: false,
+        planType: updated?.plan_type || prev.planType,
+        activationEndDate: formatDateForInput(updated?.subscription_end_date || null),
+        status: updated?.status || prev.status,
+        success: 'Abonnement mis à jour avec succès',
+      }));
+
+      setMessage('Abonnement mis à jour avec succès.');
+    } catch (error: any) {
+      console.error('Erreur mise à jour abonnement:', error);
+      setSubscriptionModal(prev => ({
+        ...prev,
+        saving: false,
+        error: error?.message || 'Erreur inattendue lors de la mise à jour',
+        success: null,
+      }));
+    }
+  }
 
   function handleSelectAllUsers() {
     if (selectedUsers.length === filteredUsers.length) {
@@ -3487,6 +3633,13 @@ export function AdminPanel() {
                         </button>
                       )}
                       <button
+                        onClick={() => openSubscriptionModal(user)}
+                        className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+                        title="Gérer l'abonnement"
+                      >
+                        <CalendarCheck2 size={18} />
+                      </button>
+                      <button
                         onClick={() => handleDeleteUser(user.id)}
                         className="p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition"
                         title="Supprimer"
@@ -3587,6 +3740,101 @@ export function AdminPanel() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {subscriptionModal.isOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">Gérer l'abonnement</h3>
+                  <p className="text-sm text-gray-500">
+                    {subscriptionModal.user?.full_name || 'Utilisateur'} · {subscriptionModal.user?.email}
+                  </p>
+                </div>
+                <button onClick={closeSubscriptionModal} className="text-gray-400 hover:text-gray-600">
+                  <X size={24} />
+                </button>
+              </div>
+
+              {subscriptionModal.loading ? (
+                <div className="py-10 text-center text-gray-500">Chargement des informations...</div>
+              ) : (
+                <div className="space-y-5">
+                  {subscriptionModal.error && (
+                    <div className="p-3 rounded-xl bg-red-100 text-red-700 text-sm font-medium">
+                      {subscriptionModal.error}
+                    </div>
+                  )}
+                  {subscriptionModal.success && (
+                    <div className="p-3 rounded-xl bg-green-100 text-green-700 text-sm font-medium">
+                      {subscriptionModal.success}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Plan d'abonnement</label>
+                    <select
+                      value={subscriptionModal.planType}
+                      onChange={(e) => setSubscriptionModal(prev => ({ ...prev, planType: e.target.value }))}
+                      className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-blue-400 focus:outline-none"
+                    >
+                      {SUBSCRIPTION_PLAN_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Date de fin d'activation</label>
+                    <input
+                      type="date"
+                      value={subscriptionModal.activationEndDate}
+                      onChange={(e) => setSubscriptionModal(prev => ({ ...prev, activationEndDate: e.target.value }))}
+                      className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-blue-400 focus:outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      L'abonnement sera marqué {subscriptionModal.activationEndDate ? 'comme actif jusqu\'à cette date incluse.' : 'comme actif immédiatement.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-semibold text-gray-700">Statut actuel :</span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        subscriptionModal.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : subscriptionModal.status === 'expired'
+                            ? 'bg-gray-200 text-gray-700'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {subscriptionModal.status}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      onClick={closeSubscriptionModal}
+                      className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition"
+                      disabled={subscriptionModal.saving}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleSaveSubscription}
+                      className="px-5 py-2 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition disabled:opacity-50"
+                      disabled={subscriptionModal.saving}
+                    >
+                      {subscriptionModal.saving ? 'Enregistrement...' : 'Enregistrer'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
