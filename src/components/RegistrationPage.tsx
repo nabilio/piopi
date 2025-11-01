@@ -138,7 +138,7 @@ function cacheCompletedRegistration(plan: CompletedRegistrationPlan) {
 export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: RegistrationPageProps) {
   const { user, profile, signIn, signInWithGoogle, signOut } = useAuth();
   const [step, setStep] = useState<'plan' | 'details' | 'payment'>('plan');
-  const [selectedPlanId, setSelectedPlanId] = useState<PlanId>(initialPlanId ?? 'basic');
+  const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(initialPlanId ?? 'basic');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [formData, setFormData] = useState({
     fullName: '',
@@ -160,15 +160,20 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     const pending = getPendingRegistration();
     return Boolean(pending);
   });
+  const [hasManuallyResetPlanSelection, setHasManuallyResetPlanSelection] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const { baseTrialDays, formattedBaseTrial, promoBanner } = useTrialConfig();
 
   const selectedPlan = useMemo(
-    () => PRICING_PLANS.find((plan) => plan.planId === selectedPlanId) ?? PRICING_PLANS[0],
+    () => (selectedPlanId ? PRICING_PLANS.find((plan) => plan.planId === selectedPlanId) ?? null : null),
     [selectedPlanId]
   );
-  const selectedChildren = selectedPlan.children;
-  const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
+  const selectedChildren = selectedPlan?.children ?? 0;
+  const price = selectedPlan
+    ? billingPeriod === 'monthly'
+      ? selectedPlan.monthlyPrice
+      : selectedPlan.yearlyPrice
+    : 0;
 
   const promoExtraDays = useMemo(() => {
     if (!promoValidation?.valid) return 0;
@@ -183,7 +188,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
-  const pricePerChild = price / selectedChildren;
+  const pricePerChild = selectedPlan && selectedChildren > 0 ? price / selectedChildren : 0;
   const isAuthenticated = Boolean(user);
   const isGoogleSignIn = user?.app_metadata?.provider === 'google';
   const shouldSkipDetails = isAuthenticated && isGoogleSignIn;
@@ -215,7 +220,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }, [user, profile]);
 
   useEffect(() => {
-    if (!initialPlanId) return;
+    if (!initialPlanId || hasManuallyResetPlanSelection) return;
     const plan = PRICING_PLANS.find((p) => p.planId === initialPlanId);
     if (plan) {
       setSelectedPlanId(plan.planId);
@@ -223,7 +228,13 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         setStep(shouldSkipDetails || hasCompletedAccountCreation ? 'payment' : 'details');
       }
     }
-  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step]);
+  }, [initialPlanId, shouldSkipDetails, hasCompletedAccountCreation, step, hasManuallyResetPlanSelection]);
+
+  useEffect(() => {
+    if (!selectedPlanId && step !== 'plan') {
+      setStep('plan');
+    }
+  }, [selectedPlanId, step]);
 
   useEffect(() => {
     if ((shouldSkipDetails || hasCompletedAccountCreation) && step === 'details') {
@@ -234,6 +245,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   function handlePlanSelection(plan: PricingPlan) {
     setSelectedPlanId(plan.planId);
     setPlanStatusMessage('');
+    setHasManuallyResetPlanSelection(false);
     if (shouldSkipDetails || hasCompletedAccountCreation) {
       setStep('payment');
     } else {
@@ -267,6 +279,11 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (!selectedPlan) {
+      setError('Veuillez choisir un plan avant de continuer.');
+      return;
+    }
 
     if (formData.password !== formData.confirmPassword) {
       setError('Les mots de passe ne correspondent pas');
@@ -450,6 +467,12 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }, [step]);
 
   async function handleStartPayment() {
+    if (!selectedPlan) {
+      setPaymentError('');
+      setPlanStatusMessage('Veuillez choisir un plan avant de poursuivre vers le paiement.');
+      return;
+    }
+
     setPaymentError('');
     setPlanStatusMessage('');
     setPaymentLoading(true);
@@ -498,20 +521,17 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   }
 
   function handleReturnToPlans() {
-    const pending = getPendingRegistration();
-    if (pending) {
-      setSelectedPlanId(pending.planId);
-      setBillingPeriod(pending.billingPeriod);
-    }
     if (typeof window !== 'undefined') {
       localStorage.removeItem(PENDING_REGISTRATION_STORAGE_KEY);
     }
+    setSelectedPlanId(null);
+    setBillingPeriod('monthly');
     setPaymentError('');
     setPlanStatusMessage("Vous pouvez à nouveau choisir un plan avant de procéder au paiement.");
     setPaymentLoading(false);
     setFinalizingPayment(false);
     setStep('plan');
-    setHasCompletedAccountCreation(true);
+    setHasManuallyResetPlanSelection(true);
   }
 
   function clearPendingRegistrationState() {
@@ -725,57 +745,73 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 )}
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6 text-left">
-                <div>
-                  <p className="text-lg font-bold text-gray-800 mb-2">Plan sélectionné</p>
-                  <p className="text-xl text-gray-700 font-semibold">
-                    {selectedPlan.name} • {selectedPlan.childrenLabel}
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {price.toFixed(2)} €<span className="text-xl text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
-                  </p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
-                  </p>
+              {selectedPlan ? (
+                <div className="grid md:grid-cols-2 gap-6 text-left">
+                  <div>
+                    <p className="text-lg font-bold text-gray-800 mb-2">Plan sélectionné</p>
+                    <p className="text-xl text-gray-700 font-semibold">
+                      {selectedPlan.name} • {selectedPlan.childrenLabel}
+                    </p>
+                    <p className="text-3xl font-bold text-gray-900 mt-2">
+                      {price.toFixed(2)} €<span className="text-xl text-gray-600">/{billingPeriod === 'monthly' ? 'mois' : 'an'}</span>
+                    </p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-800 mb-2">Ce qui est inclus</p>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-start gap-2">
+                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                          <Check className="text-white" size={16} />
+                        </div>
+                        <span>Accès complet au programme scolaire français</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                          <Check className="text-white" size={16} />
+                        </div>
+                        <span>Leçons interactives et quiz personnalisés</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                          <Check className="text-white" size={16} />
+                        </div>
+                        <span>Suivi des progrès en temps réel</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
+                          <Check className="text-white" size={16} />
+                        </div>
+                        <span>Réseau social sécurisé pour vos enfants</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-800 mb-2">Ce qui est inclus</p>
-                  <ul className="space-y-2 text-sm text-gray-700">
-                    <li className="flex items-start gap-2">
-                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                        <Check className="text-white" size={16} />
-                      </div>
-                      <span>Accès complet au programme scolaire français</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                        <Check className="text-white" size={16} />
-                      </div>
-                      <span>Leçons interactives et quiz personnalisés</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                        <Check className="text-white" size={16} />
-                      </div>
-                      <span>Suivi des progrès en temps réel</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <div className="bg-green-500 rounded-full p-1 flex-shrink-0 mt-0.5">
-                        <Check className="text-white" size={16} />
-                      </div>
-                      <span>Réseau social sécurisé pour vos enfants</span>
-                    </li>
-                  </ul>
+              ) : (
+                <div className="text-center text-gray-600">
+                  <p className="text-base font-semibold">Choisissez un plan pour afficher ses détails.</p>
+                  <p className="text-sm mt-2">Sélectionnez une offre ci-dessus pour découvrir le récapitulatif et continuer.</p>
                 </div>
-              </div>
+              )}
             </div>
 
             <button
-              onClick={() => handlePlanSelection(selectedPlan)}
-              className="w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold rounded-xl hover:from-blue-600 hover:to-purple-600 transition flex items-center justify-center gap-2 text-lg"
+              onClick={() => selectedPlan && handlePlanSelection(selectedPlan)}
+              disabled={!selectedPlan}
+              className={`w-full py-4 rounded-xl font-bold transition flex items-center justify-center gap-2 text-lg ${
+                selectedPlan
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              {shouldSkipDetails ? 'Passer au paiement sécurisé' : `Continuer avec le plan ${selectedPlan.name}`}
-              <ArrowRight size={20} />
+              {selectedPlan
+                ? shouldSkipDetails
+                  ? 'Passer au paiement sécurisé'
+                  : `Continuer avec le plan ${selectedPlan.name}`
+                : 'Choisissez un plan pour continuer'}
+              {selectedPlan && <ArrowRight size={20} />}
             </button>
 
             {!isAuthenticated && (
@@ -839,8 +875,8 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   if (step === 'payment') {
     const pending = getPendingRegistration();
     const planDetails = pending
-      ? PRICING_PLANS.find((plan) => plan.planId === pending.planId) ?? selectedPlan
-      : selectedPlan;
+      ? PRICING_PLANS.find((plan) => plan.planId === pending.planId) ?? selectedPlan ?? PRICING_PLANS[0]
+      : selectedPlan ?? PRICING_PLANS[0];
     const childrenCount = pending?.children ?? selectedChildren;
     const currentBillingPeriod = pending?.billingPeriod ?? billingPeriod;
     const displayPrice = currentBillingPeriod === 'monthly' ? planDetails.monthlyPrice : planDetails.yearlyPrice;
@@ -1002,12 +1038,19 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Créez votre compte</h2>
-            <p className="text-gray-600">
-              Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/{billingPeriod === 'monthly' ? 'mois' : 'an'}
-            </p>
-            <p className="text-xs text-blue-700 mt-1">
-              Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
-            </p>
+            {selectedPlan ? (
+              <>
+                <p className="text-gray-600">
+                  Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/
+                  {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Soit {pricePerChild.toFixed(2)} € par enfant par {billingPeriod === 'monthly' ? 'mois' : 'an'}
+                </p>
+              </>
+            ) : (
+              <p className="text-gray-600">Sélectionnez un plan pour continuer votre inscription.</p>
+            )}
             <p className="text-xs text-green-600 mt-1">
               Essai gratuit de {summaryTrialLabel} • Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}
             </p>
