@@ -324,7 +324,7 @@ export function UpgradePlansPage({ currentChildrenCount, onCancel, onSuccess }: 
           .from('subscription_payments')
           .insert({
             subscription_id: subscription.id,
-            parent_id: parentId,
+            user_id: parentId,
             amount: newPrice,
             children_count: newChildrenCount,
             payment_method: paymentMethod,

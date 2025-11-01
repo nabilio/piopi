@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
     const { error: subscriptionError } = await supabase
       .from('subscriptions')
       .insert({
-        parent_id: authData.user.id,
+        user_id: authData.user.id,
         plan_type: planId,
         children_count: selectedChildren,
         price,
