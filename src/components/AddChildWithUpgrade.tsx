@@ -57,7 +57,7 @@ export function AddChildWithUpgrade({ onBack, onSuccess }: AddChildWithUpgradePr
   const planType = subscription?.plan_type || 'basic';
   const isLibertePlan = planType === 'liberte';
 
-  // Pour le plan Liberté : Base 4 enfants (prix premium 8€) + 2€ par enfant supplémentaire
+  // Pour le plan Liberté : Base 4 enfants (prix premium 8€) avec tarification additionnelle pour les enfants supplémentaires
   const willExceedLimit = isLibertePlan
     ? false // Plan Liberté n'a pas de limite
     : currentChildrenCount >= currentMaxChildren;
@@ -67,7 +67,7 @@ export function AddChildWithUpgrade({ onBack, onSuccess }: AddChildWithUpgradePr
   // Calcul du prix
   const calculatePrice = (childCount: number, plan: string) => {
     if (plan === 'liberte') {
-      // Base : 8€ pour 4 enfants + 2€ par enfant supplémentaire
+      // Base : 8€ pour 4 enfants avec tarification ajustée pour chaque enfant supplémentaire
       return childCount <= 4 ? 8 : 8 + (childCount - 4) * 2;
     }
     return childCount * 2;
@@ -309,7 +309,7 @@ export function AddChildWithUpgrade({ onBack, onSuccess }: AddChildWithUpgradePr
               </h1>
               <p className="text-gray-600 text-lg">
                 {isLibertePlan
-                  ? `Au-delà de 4 enfants : +2€ par enfant supplémentaire`
+                  ? 'Au-delà de 4 enfants : tarif additionnel pour chaque enfant supplémentaire'
                   : 'Confirmation requise'
                 }
               </p>

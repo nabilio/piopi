@@ -351,7 +351,7 @@ export function SubscriptionManager({ onUpgrade }: SubscriptionManagerProps = {}
               <span className="text-gray-600 font-medium">Tarif mensuel</span>
             </div>
             <p className="text-3xl font-black text-gray-800">{monthlyPrice}€</p>
-            <p className="text-sm text-gray-600 mt-1">{actualChildrenCount > 0 ? (monthlyPrice / actualChildrenCount).toFixed(2) : monthlyPrice.toFixed(2)}€ par enfant</p>
+            <p className="text-sm text-gray-600 mt-1">Tarif appliqué à l'ensemble de votre foyer</p>
           </div>
 
           <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl">

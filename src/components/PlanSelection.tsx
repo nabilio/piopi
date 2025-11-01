@@ -34,7 +34,6 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
 
   const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
   const price = selectedPlan.monthlyPrice;
-  const pricePerChild = price / selectedChildren;
 
   const promoExtraDays = useMemo(() => {
     if (!promoValidation?.valid) return 0;
@@ -44,12 +43,6 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const totalTrialDays = baseTrialDays + promoExtraDays;
   const formattedTotalTrial = formatTrialDuration(totalTrialDays);
   const summaryTrialLabel = promoValidation?.valid ? formattedTotalTrial : formattedBaseTrial;
-  const firstChargeDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + totalTrialDays);
-    return date;
-  }, [totalTrialDays]);
-
   useEffect(() => {
     if (!initialPlanId) {
       return;
@@ -233,7 +226,6 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
               {PRICING_PLANS.map(plan => {
                 const planPrice = plan.monthlyPrice;
-                const perChild = planPrice / plan.children;
                 const isSelected = selectedChildren === plan.children;
                 return (
                   <button
@@ -259,9 +251,6 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
                     </div>
                     <div className="text-xs text-gray-500">
                       /mois
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">
-                      {perChild.toFixed(2)}€ par enfant et par mois
                     </div>
                   </button>
                 );
@@ -302,13 +291,10 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
                 <div className="text-sm text-gray-600 space-y-1">
                   <div>Pour {selectedChildren} {selectedChildren === 1 ? 'enfant' : 'enfants'}</div>
                   <div className="font-semibold text-blue-600">
-                    Soit {pricePerChild.toFixed(2)}€ par enfant par mois
+                    Essai gratuit sans aucun prélèvement aujourd'hui
                   </div>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">
-                Premier prélèvement le {firstChargeDate.toLocaleDateString('fr-FR')}
-              </p>
               {promoValidation?.valid && (
                 <p className="text-xs text-green-700 mt-1">
                   Code promo appliqué : votre essai total dure {formattedTotalTrial}.

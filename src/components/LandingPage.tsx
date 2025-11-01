@@ -297,7 +297,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                 Tarification simple et transparente
               </h2>
               <p className="text-xl text-gray-600">
-                Seulement 2€ par enfant par mois après l'essai gratuit
+                Un tarif mensuel très accessible après l'essai gratuit
               </p>
             </div>
 
@@ -351,7 +351,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                   </div>
                   <p className="text-sm text-gray-600">Jusqu'à 2 enfants</p>
                   <div className="mt-2 bg-green-50 border border-green-300 rounded-lg px-2 py-1">
-                    <p className="text-xs text-green-700 font-bold">1,50€ par enfant</p>
+                    <p className="text-xs text-green-700 font-bold">Idéal pour deux enfants</p>
                   </div>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -394,7 +394,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                   </div>
                   <p className="text-sm text-gray-600">Jusqu'à 3 enfants</p>
                   <div className="mt-2 bg-green-50 border border-green-300 rounded-lg px-2 py-1">
-                    <p className="text-xs text-green-700 font-bold">1,67€ par enfant</p>
+                    <p className="text-xs text-green-700 font-bold">Pensé pour les familles nombreuses</p>
                   </div>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -437,7 +437,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                   </div>
                   <p className="text-sm text-gray-600">Jusqu'à 4 enfants</p>
                   <div className="mt-2 bg-green-50 border border-green-300 rounded-lg px-2 py-1">
-                    <p className="text-xs text-green-700 font-bold">1,50€ par enfant</p>
+                    <p className="text-xs text-green-700 font-bold">Notre meilleure offre famille</p>
                   </div>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -484,7 +484,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                   </div>
                   <p className="text-sm text-gray-600">Jusqu'à 5 enfants</p>
                   <div className="mt-2 bg-amber-50 border border-amber-300 rounded-lg px-2 py-1">
-                    <p className="text-xs text-amber-700 font-bold">+2€ par enfant supplémentaire</p>
+                    <p className="text-xs text-amber-700 font-bold">Flexibilité totale pour les grandes familles</p>
                   </div>
                 </div>
                 <ul className="space-y-3 mb-6">
@@ -494,7 +494,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-700">Ajoutez des enfants supplémentaires à tout moment (+2€/enfant)</span>
+                    <span className="text-sm text-gray-700">Ajoutez des enfants supplémentaires à tout moment</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Check size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
@@ -528,7 +528,7 @@ export function LandingPage({ onPlanSelect, onContactClick, onTermsClick, onPriv
 
             <div className="mt-8 text-center">
               <p className="text-gray-600 text-lg">
-                <strong>💡 Astuce :</strong> Plus vous avez d'enfants, plus vous économisez par enfant !
+                <strong>💡 Astuce :</strong> Plus vous avez d'enfants, plus votre abonnement reste avantageux !
               </p>
             </div>
           </div>

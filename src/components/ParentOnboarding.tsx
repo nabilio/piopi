@@ -616,7 +616,7 @@ export function ParentOnboarding({ onComplete }: ParentOnboardingProps) {
               <p className="font-bold text-green-900 mb-2">🎉 Offre de bienvenue</p>
               <ul className="space-y-1 text-sm text-green-800">
                 <li>✓ Premier mois gratuit</li>
-                <li>✓ Seulement 2€ par enfant par mois ensuite</li>
+                <li>✓ Offre mensuelle très abordable ensuite</li>
                 <li>✓ Sans engagement - Annulation à tout moment</li>
               </ul>
             </div>

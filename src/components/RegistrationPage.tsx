@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ArrowRight, Mail, Lock, User, Tag, ShieldCheck, X, LogOut } from 'lucide-react';
+import { Check, ArrowRight, Mail, Lock, User, ShieldCheck, X, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
+import { useTrialConfig } from '../hooks/useTrialConfig';
 import { createStripeCheckout, verifyStripeCheckout, type PlanId } from '../utils/payment';
 import {
   isMissingColumnError,
@@ -47,7 +47,7 @@ const PRICING_PLANS: PricingPlan[] = [
     monthlyPrice: 3.0,
     yearlyPrice: 30.0,
     badge: 'Populaire',
-    highlight: '1,50€ par enfant',
+    highlight: 'Idéal pour deux enfants',
     features: [
       'Tous les cours et exercices',
       'Suivi détaillé',
@@ -62,7 +62,7 @@ const PRICING_PLANS: PricingPlan[] = [
     childrenLabel: "Jusqu'à 3 enfants",
     monthlyPrice: 5.0,
     yearlyPrice: 50.0,
-    highlight: '1,67€ par enfant',
+    highlight: 'Pensé pour les grandes fratries',
     features: [
       'Tous les cours et exercices',
       'Suivi avancé',
@@ -93,10 +93,10 @@ const PRICING_PLANS: PricingPlan[] = [
     childrenLabel: "Jusqu'à 5 enfants",
     monthlyPrice: 8.0,
     yearlyPrice: 80.0,
-    highlight: '+2€ par enfant supplémentaire',
+    highlight: 'Flexibilité totale pour les grandes familles',
     features: [
       "Jusqu'à 5 enfants inclus",
-      'Ajoutez des enfants supplémentaires à tout moment (+2€/enfant)',
+      'Ajoutez des enfants supplémentaires à tout moment selon vos besoins',
       'Tous les cours et exercices',
       'Suivi de progression avancé',
       'Mode bataille',
@@ -224,12 +224,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     email: '',
     password: '',
     confirmPassword: '',
-    promoCode: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
-  const [validatingPromo, setValidatingPromo] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -253,14 +250,8 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
   const selectedChildren = selectedPlan?.children ?? 0;
   const price = selectedPlan ? selectedPlan.monthlyPrice : 0;
 
-  const promoExtraDays = useMemo(() => {
-    if (!promoValidation?.valid) return 0;
-    return (promoValidation.free_months || 0) * 30;
-  }, [promoValidation]);
-
-  const totalTrialDays = baseTrialDays + promoExtraDays;
-  const formattedTotalTrial = formatTrialDuration(totalTrialDays);
-  const summaryTrialLabel = promoValidation?.valid ? formattedTotalTrial : formattedBaseTrial;
+  const totalTrialDays = baseTrialDays;
+  const summaryTrialLabel = formattedBaseTrial;
 
   useEffect(() => {
     const progress = getSavedRegistrationProgress();
@@ -285,10 +276,8 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     date.setDate(date.getDate() + totalTrialDays);
     return date;
   }, [totalTrialDays]);
-  const firstChargeDateLabel = useMemo(() => firstChargeDate.toLocaleDateString('fr-FR'), [firstChargeDate]);
-  const dynamicPaymentReminder = `Aucun prélèvement aujourd'hui. Premier paiement le ${firstChargeDateLabel} si vous continuez après l'essai.`;
+  const trialHighlight = `Essai gratuit de ${summaryTrialLabel} • Aucun prélèvement aujourd'hui.`;
   const cancellationMessage = 'Annulez à tout moment depuis vos paramètres parent.';
-  const pricePerChild = selectedPlan && selectedChildren > 0 ? price / selectedChildren : 0;
   const shouldSkipDetails = isAuthenticated;
 
   useEffect(() => {
@@ -367,29 +356,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     }
   }
 
-  async function validatePromoCode() {
-    if (!formData.promoCode) {
-      setPromoValidation(null);
-      return;
-    }
-
-    setValidatingPromo(true);
-    try {
-      const { data, error } = await supabase.rpc('validate_promo_code', {
-        promo_code_input: formData.promoCode
-      });
-
-      if (error) throw error;
-
-      setPromoValidation(data);
-    } catch (err: unknown) {
-      console.error('Promo code validation error:', err);
-      setPromoValidation({ valid: false, message: 'Erreur lors de la validation du code' });
-    } finally {
-      setValidatingPromo(false);
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -412,8 +378,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     setLoading(true);
 
     try {
-      const promoMonths = promoValidation?.valid ? (promoValidation.free_months || 0) : 0;
-
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/register-parent`;
 
       const response = await fetch(apiUrl, {
@@ -430,8 +394,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           planId: selectedPlan.planId,
           billingPeriod,
           price,
-          promoCode: formData.promoCode || null,
-          promoMonths,
         }),
       });
 
@@ -868,7 +830,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="flex items-start gap-2">
                   <Check className="text-green-500 mt-0.5" size={16} />
-                  <span>{dynamicPaymentReminder}</span>
+                  <span>{trialHighlight}</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <Check className="text-green-500 mt-0.5" size={16} />
@@ -901,7 +863,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
               <div className="flex flex-col gap-6 md:flex-row md:flex-nowrap">
                 {PRICING_PLANS.map((plan) => {
                   const priceForPeriod = plan.monthlyPrice;
-                  const perChild = priceForPeriod / plan.children;
                   const isSelected = plan.planId === selectedPlanId;
 
                   return (
@@ -933,9 +894,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                             <p className="text-xs text-green-700 font-semibold">{plan.highlight}</p>
                           </div>
                         )}
-                        <p className="text-xs text-gray-500 mt-3">
-                          Soit {perChild.toFixed(2)}€ par enfant par mois
-                        </p>
                       </div>
                       <ul className="space-y-3 mb-6 text-sm text-gray-700">
                         {plan.features.map((feature) => (
@@ -1068,7 +1026,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
     const displayPrice = planDetails.monthlyPrice;
     const billingPeriodLabel = 'mois';
     const formattedPrice = displayPrice.toFixed(2);
-    const planChargeReminder = `Le montant de l'abonnement (${formattedPrice} €/mois) sera prélevé le ${firstChargeDateLabel} si vous poursuivez après l'essai.`;
+    const planChargeReminder = `Le montant de l'abonnement (${formattedPrice} €/mois) sera prélevé automatiquement à la fin de votre essai si vous poursuivez.`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
@@ -1196,18 +1154,26 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 <p className="text-gray-600">
                   Plan {selectedPlan.name} • {selectedPlan.childrenLabel} - {price.toFixed(2)} €/mois
                 </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Soit {pricePerChild.toFixed(2)} € par enfant par mois
-                </p>
               </>
             ) : (
               <p className="text-gray-600">Sélectionnez un plan pour continuer votre inscription.</p>
             )}
-            <p className="text-xs text-green-600 mt-1">
-              Essai gratuit de {summaryTrialLabel} • {dynamicPaymentReminder}
-            </p>
-            <p className="text-xs text-gray-500">{cancellationMessage}</p>
-            <p className="text-xs text-gray-500">{securityMessage}</p>
+            <div className="mt-6 text-left">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Check className="text-blue-600 mt-0.5" size={18} />
+                  <span className="text-sm font-semibold text-blue-900">{trialHighlight}</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Check className="text-green-500 mt-0.5" size={18} />
+                  <span className="text-sm text-gray-700">{cancellationMessage}</span>
+                </div>
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="text-purple-500 mt-0.5" size={18} />
+                  <span className="text-sm text-gray-700">{securityMessage}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {error && (
@@ -1276,47 +1242,6 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
                 required
                 minLength={6}
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                <Tag className="inline mr-2" size={16} />
-                Code promo (optionnel)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={formData.promoCode}
-                  onChange={(e) => {
-                    setFormData({ ...formData, promoCode: e.target.value.toUpperCase() });
-                    setPromoValidation(null);
-                  }}
-                  className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-400 focus:outline-none uppercase"
-                  placeholder="RENTREE2025"
-                />
-                <button
-                  type="button"
-                  onClick={validatePromoCode}
-                  disabled={!formData.promoCode || validatingPromo}
-                  className="px-4 py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {validatingPromo ? '...' : 'Vérifier'}
-                </button>
-              </div>
-              {promoValidation && (
-                <div className={`mt-2 p-3 rounded-lg ${promoValidation.valid ? 'bg-green-50 border-2 border-green-200' : 'bg-red-50 border-2 border-red-200'}`}>
-                  <p className={`text-sm font-semibold ${promoValidation.valid ? 'text-green-700' : 'text-red-700'}`}>
-                    {promoValidation.valid
-                      ? `Code valide ! ${promoValidation.free_months} mois gratuits supplémentaires`
-                      : promoValidation.message || 'Code invalide'}
-                  </p>
-                  {promoValidation.valid && (
-                    <p className="text-xs text-green-700 mt-1">
-                      Essai total: {formattedTotalTrial}.
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
 
             <button
