@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ArrowRight, Users, Tag, Info, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTrialConfig, formatTrialDuration } from '../hooks/useTrialConfig';
 
@@ -32,9 +32,21 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
   const [error, setError] = useState('');
   const [promoValidation, setPromoValidation] = useState<{ valid: boolean; message?: string; free_months?: number } | null>(null);
   const [validatingPromo, setValidatingPromo] = useState(false);
-  const { baseTrialDays, formattedBaseTrial, promoHeadline: trialHeadline, activeDescription } = useTrialConfig();
+  const [step, setStep] = useState<FlowStep>('plan-selection');
+  const [processingCheckout, setProcessingCheckout] = useState(false);
+  const [finalizingCheckout, setFinalizingCheckout] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+  const isMountedRef = useRef(true);
+  const hasHandledCheckoutRef = useRef(false);
+  const {
+    baseTrialDays,
+    formattedBaseTrial,
+    promoHeadline: trialHeadline,
+    activeDescription,
+    loading: trialConfigLoading,
+  } = useTrialConfig();
 
-  const selectedPlan = PRICING_PLANS.find(p => p.children === selectedChildren) || PRICING_PLANS[0];
+  const selectedPlan = PRICING_PLANS.find((plan) => plan.children === selectedChildren) || PRICING_PLANS[0];
   const price = billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice;
   const pricePerChild = price / selectedChildren;
 
@@ -101,75 +113,226 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
     }
   }
 
-  async function handleContinue() {
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  async function finalizeCheckout(pending: PendingCheckoutPayload, sessionId: string) {
     setError('');
-    setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const verification = await verifyStripeCheckout(sessionId);
+      if (verification.status !== 'complete' || verification.paymentStatus !== 'paid') {
+        throw new Error('Le paiement n’a pas été validé.');
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (!user) {
         throw new Error('Utilisateur non authentifié');
       }
 
-      const promoMonths = promoValidation?.valid ? (promoValidation.free_months || 0) : 0;
+      const selectedPlanConfig = PRICING_PLANS.find((plan) => plan.id === pending.planId) || PRICING_PLANS[0];
+      const trialStartDate = new Date();
       const trialEndDate = new Date();
-      trialEndDate.setDate(trialEndDate.getDate() + totalTrialDays);
+      trialEndDate.setDate(trialEndDate.getDate() + pending.totalTrialDays);
 
       const { error: subscriptionError } = await supabase
         .from('subscriptions')
-        .insert({
-          user_id: user.id,
-          plan_type: billingPeriod,
-          children_count: selectedChildren,
-          price,
-          status: 'trial',
-          trial_start_date: new Date().toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-          promo_code: promoValidation?.valid ? promoCode.trim().toUpperCase() : null,
-          promo_months_remaining: promoMonths,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            plan_type: pending.planId,
+            children_count: pending.childrenCount,
+            price: pending.price,
+            status: 'trial',
+            trial_start_date: trialStartDate.toISOString(),
+            trial_end_date: trialEndDate.toISOString(),
+            promo_code: pending.promoCode || null,
+            promo_months_remaining: pending.promoMonths || 0,
+          },
+          { onConflict: 'user_id' },
+        );
 
       if (subscriptionError) throw subscriptionError;
 
-      await supabase
-        .from('subscription_history')
-        .insert({
-          user_id: user.id,
-          children_count: selectedChildren,
-          price: price,
-          plan_type: billingPeriod,
-          action_type: 'trial_started',
-          notes: promoCode && promoValidation?.valid
-            ? `Essai gratuit de ${formattedTotalTrial} démarré avec le code promo: ${promoCode.toUpperCase()}`
-            : `Essai gratuit de ${formattedTotalTrial} démarré`,
-        });
+      await supabase.from('subscription_history').insert({
+        user_id: user.id,
+        children_count: pending.childrenCount,
+        price: pending.price,
+        plan_type: pending.planId,
+        action_type: 'trial_started',
+        notes:
+          pending.promoCode && pending.promoMonths
+            ? `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré avec le code promo: ${pending.promoCode}`
+            : `Essai gratuit de ${formatTrialDuration(pending.totalTrialDays)} démarré`,
+      });
 
-      if (promoCode && promoValidation?.valid) {
+      if (pending.promoCode && pending.promoMonths) {
         await supabase.rpc('increment_promo_usage', {
-          promo_code_input: promoCode
+          promo_code_input: pending.promoCode,
         });
       }
+    },
+    [onComplete],
+  );
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
         try {
           await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-subscription-confirmation`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${session.access_token}`,
+              Authorization: `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
               email: user.email,
-              childrenCount: selectedChildren,
-              monthlyPrice: price,
+              childrenCount: pending.childrenCount,
+              monthlyPrice: selectedPlanConfig.monthlyPrice,
             }),
           });
-        } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
+        } catch (parseError) {
+          console.error('Failed to parse pending checkout payload:', parseError);
+          setError('Une erreur est survenue lors de la récupération du paiement.');
+          localStorage.removeItem(PENDING_CHECKOUT_KEY);
         }
       }
+    } else if (checkoutStatus === 'cancel') {
+      setStep('payment');
+      setError('Paiement annulé. Vous pouvez réessayer.');
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+    }
+
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+      if (isMountedRef.current) {
+        setStep('confirmation');
+        const complete = onCompleteRef.current;
+        if (typeof complete === 'function') {
+          complete();
+        }
+      }
+    } catch (error: unknown) {
+      console.error('Subscription finalization error:', error);
+      const message = error instanceof Error ? error.message : "Erreur lors de la finalisation de l'abonnement";
+      if (isMountedRef.current) {
+        setError(message);
+      }
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+      hasHandledCheckoutRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (trialConfigLoading || hasHandledCheckoutRef.current) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get('checkout_status');
+    const provider = params.get('provider');
+    const sessionId = params.get('session_id');
+
+    if (!checkoutStatus) {
+      return;
+    }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          const pending = JSON.parse(pendingRaw) as PendingCheckoutPayload;
+          const matchingPlan = PRICING_PLANS.find((plan) => plan.id === pending.planId);
+          if (matchingPlan) {
+            setSelectedChildren(matchingPlan.children);
+          }
+          setStep('payment');
+          setFinalizingCheckout(true);
+          hasHandledCheckoutRef.current = true;
+          finalizeCheckout(pending, sessionId)
+            .catch(() => {
+              // finalizeCheckout already handles error state
+            })
+            .finally(() => {
+              if (isMountedRef.current) {
+                setFinalizingCheckout(false);
+              }
+            });
+        } catch (parseError) {
+          console.error('Failed to parse pending checkout payload:', parseError);
+          setError('Une erreur est survenue lors de la récupération du paiement.');
+          localStorage.removeItem(PENDING_CHECKOUT_KEY);
+          hasHandledCheckoutRef.current = false;
+        }
+      }
+    } else if (checkoutStatus === 'cancel') {
+      setStep('payment');
+      setError('Paiement annulé. Vous pouvez réessayer.');
+      localStorage.removeItem(PENDING_CHECKOUT_KEY);
+      hasHandledCheckoutRef.current = true;
+    }
+
+    params.delete('checkout_status');
+    params.delete('provider');
+    params.delete('session_id');
+    const cleanUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }, [trialConfigLoading]);
+
+  if (trialConfigLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="mx-auto h-16 w-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-lg text-gray-600 font-semibold">Chargement de votre offre d'essai...</p>
+        </div>
+      </div>
+    );
+  }
+
+  async function handleStartPayment() {
+    if (billingPeriod === 'yearly') {
+      setError("Le paiement annuel sera bientôt disponible. Choisissez l'option mensuelle pour commencer votre essai.");
+      return;
+    }
+
+    setError('');
+    setProcessingCheckout(true);
+
+    try {
+      const successUrl = new URL(window.location.href);
+      successUrl.searchParams.set('checkout_status', 'success');
+      successUrl.searchParams.set('provider', 'stripe');
+
+      const cancelUrl = new URL(window.location.href);
+      cancelUrl.searchParams.set('checkout_status', 'cancel');
+      cancelUrl.searchParams.set('provider', 'stripe');
+
+      const checkout = await createStripeCheckout({
+        planId: selectedPlan.id,
+        childrenCount: selectedPlan.children,
+        successUrl: successUrl.toString(),
+        cancelUrl: cancelUrl.toString(),
+      });
+
+      const pendingPayload: PendingCheckoutPayload = {
+        planId: selectedPlan.id,
+        childrenCount: checkout.billedChildren,
+        price: checkout.amount,
+        sessionId: checkout.sessionId,
+        promoCode: promoValidation?.valid ? promoCode.trim().toUpperCase() : undefined,
+        promoMonths: promoValidation?.valid ? promoValidation.free_months || 0 : undefined,
+        totalTrialDays,
+      };
+
+      localStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify(pendingPayload));
 
       onComplete();
     } catch (err: any) {
@@ -455,6 +618,14 @@ export function PlanSelection({ onComplete }: PlanSelectionProps) {
             )}
           </button>
         </div>
+
+        {step === 'plan-selection' && planStep}
+        {step === 'payment' && paymentStep}
+        {step === 'confirmation' && confirmationStep}
+
+        {step === 'plan-selection' && planStep}
+        {step === 'payment' && paymentStep}
+        {step === 'confirmation' && confirmationStep}
 
         <div className="text-center space-y-4 mt-8">
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 max-w-2xl mx-auto">
