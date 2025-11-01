@@ -412,10 +412,14 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
       const subscriptionStartDate = new Date();
       const normalizedStatus = verification.paymentStatus === 'paid' ? 'active' : 'trial';
 
+      const isMissingColumnError = (candidate: unknown) =>
+        typeof candidate === 'object' && candidate !== null && 'code' in candidate && (candidate as { code?: string }).code === '42703';
+
       type SubscriptionRecord = { id: string; trial_end_date: string | null };
       let subscriptionRecord: SubscriptionRecord | null = null;
       let subscriptionKey: 'user_id' | 'parent_id' = 'user_id';
       const subscriptionLookupErrors: unknown[] = [];
+      let shouldAttemptLegacyLookup = false;
 
       const { data, error } = await supabase
         .from('subscriptions')
@@ -424,12 +428,16 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
         .maybeSingle();
 
       if (error) {
-        subscriptionLookupErrors.push(error);
+        if (isMissingColumnError(error)) {
+          shouldAttemptLegacyLookup = true;
+        } else {
+          subscriptionLookupErrors.push(error);
+        }
       } else if (data) {
         subscriptionRecord = data;
       }
 
-      if (!subscriptionRecord) {
+      if (!subscriptionRecord && shouldAttemptLegacyLookup) {
         const { data: legacyData, error: legacyError } = await supabase
           .from('subscriptions')
           .select<SubscriptionRecord>('id, trial_end_date')
@@ -437,7 +445,9 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
           .maybeSingle();
 
         if (legacyError) {
-          subscriptionLookupErrors.push(legacyError);
+          if (!isMissingColumnError(legacyError)) {
+            subscriptionLookupErrors.push(legacyError);
+          }
         } else if (legacyData) {
           subscriptionRecord = legacyData;
           subscriptionKey = 'parent_id';
