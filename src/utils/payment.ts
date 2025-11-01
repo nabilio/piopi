@@ -16,23 +16,12 @@ type StripeCheckoutResponse = {
   amount: number;
 };
 
-type PaypalOrderResponse = {
-  approvalUrl: string;
-  orderId: string;
-  billedChildren: number;
-  amount: number;
-};
-
 type StripeVerificationResponse = {
   status: string | null;
   paymentStatus: string | null;
   amountTotal: number | null;
   currency: string | null;
   subscription: string | null;
-};
-
-type PaypalCaptureResponse = {
-  status: string;
 };
 
 async function getAuthHeaders() {
@@ -97,40 +86,3 @@ export async function verifyStripeCheckout(sessionId: string): Promise<StripeVer
   return response.json();
 }
 
-export async function createPaypalOrder(options: CreatePaymentOptions): Promise<PaypalOrderResponse> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(getFunctionUrl('create-paypal-order'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: JSON.stringify(options),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || 'Impossible de créer la commande PayPal');
-  }
-
-  return response.json();
-}
-
-export async function capturePaypalOrder(orderId: string): Promise<PaypalCaptureResponse> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(getFunctionUrl('capture-paypal-order'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-    body: JSON.stringify({ orderId }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || 'Impossible de confirmer la commande PayPal');
-  }
-
-  return response.json();
-}

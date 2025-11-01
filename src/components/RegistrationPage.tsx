@@ -1259,7 +1259,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             )}
 
             <p className="text-sm text-gray-600 mb-6">
-              Paiements sécurisés (Stripe & PayPal). {securityMessage}
+              Paiements sécurisés par carte (Stripe). {securityMessage}
             </p>
 
             <button
@@ -1294,7 +1294,7 @@ export function RegistrationPage({ onSuccess, onCancel, initialPlanId }: Registr
             </button>
 
             <p className="text-xs text-gray-500 text-center mt-4">
-              En validant, vous acceptez nos conditions générales d'utilisation. Votre moyen de paiement sera enregistré via Stripe ou PayPal.
+              En validant, vous acceptez nos conditions générales d'utilisation. Votre moyen de paiement sera enregistré via Stripe.
             </p>
           </div>
         </div>
